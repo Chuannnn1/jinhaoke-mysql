@@ -515,11 +515,9 @@ main           ← 正式版（只有 repo 擁有者能 merge）
 ### 9.3 團隊分工
 
 | 組員 | 負責範圍 |
-|------|---------|
-| 組員 1（你）| 前台點餐頁 + 後台全部 UI + SQL schema + Menu API |
+| chuannnn | 前台點餐頁 + 後台全部 UI + SQL schema + Menu API |
 | 組員 2 | Orders 全套 API（5 個 endpoint）+ Orders 相關前端 |
 | 組員 3 | Inventory + Purchase Orders + Suppliers 全套 API |
-| 組員 4 | 部署（setup.sh + start.sh）+ 文件整合 + API Demo |
 
 ### 9.4 交接注意事項
 
