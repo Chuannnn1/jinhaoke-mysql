@@ -229,23 +229,21 @@ jinhaoker-pos/
 ```
 supplier ─────┐
               ▼
-ingredient ───┐
-              ├─ recipe ──► menu_item
+ingredient ───┤
+              ├─ recipe ──► menu_item    │ via ingredient_id
               │
-order_item ◄─┘
+              └─► purchase_order (單一食材)   │ via ingredient_id
+                       │
+                       │ 1:1 (最多一張退貨單)
+                       ▼
+                return_order
+                         │
+order_item ◄────────────┘
               │
               ▼
 "order" ────────────► delivery_customer（外送顧客地址）
-      │                      ▲
-      │                      │
-      └──► return_order ◄────┘
-                    │
-                    ▼
-             return_order_item
 
-purchase_order ──► purchase_order_item
-
-inventory_log（庫存異動記錄）
+inventory_log（庫存異動記錄，輔助表）
 ```
 
 ### 5.2 命名規則
@@ -310,7 +308,43 @@ sqlite3 data/jinhaoker.db < lib/seed.sql
 
 > ⚠️ 修改 schema 前先 `DROP TABLE IF EXISTS`，再重新 `CREATE`。正式營運後要另外寫 migration script。
 
-### 5.6 SQL 語法要點
+### 5.5 業務假設說明（Schema 設計前提）
+
+**核心假設：金濠客食堂「一張訂購單只對應一種食材」**
+
+這是基於實際採購習慣：肉商、菜商、糧商按品項分流，每次下單只跟一個供應商訂一種食材。此假設讓 schema 能完整對齊 3NF：
+
+- `purchase_order` 不需要 `supplier_id`：透過 `ingredient_id → ingredient.supplier_id → supplier` 鏈式查詢即可取得
+- `return_order` 不需要子明細表：一張退貨單對應一種食材，平鋪結構即可表達
+
+**供應商查詢方式：**
+```sql
+SELECT po.po_id, ing.name AS ingredient_name,
+       sup.name AS supplier_name, sup.phone AS supplier_phone
+FROM purchase_order po
+JOIN ingredient ing ON po.ingredient_id = ing.ingredient_id
+JOIN supplier sup ON ing.supplier_id = sup.supplier_id
+WHERE po.po_id = ?;
+```
+
+### 5.6 ERD ↔ Schema 對應表
+
+| PDF ERD 實體/關係 | 類型 | 對應 SQL Table |
+|------------------|------|----------------|
+| 顧客訂單 | Entity | `"order"` |
+| 顧客訂單-包含 | Relationship | `order_item` |
+| 餐點 | Entity | `menu_item` |
+| 食材-消耗 | Relationship | `recipe` |
+| 食材 | Entity | `ingredient` |
+| 供應商 | Entity | `supplier` |
+| 供應（供應商 1:N 食材）| Relationship | `ingredient.supplier_id` (FK) |
+| 訂購單 | Entity | `purchase_order`（單食材，平鋪結構）|
+| 退貨單 | Entity | `return_order`（單食材，平鋪結構）|
+| 產生（訂購單 1:1 退貨單）| Relationship | `return_order.po_id` (FK, UNIQUE) |
+| 外送顧客單 | Entity | `delivery_customer` |
+| — | 實作輔助 | `inventory_log`（庫存異動追蹤）|
+
+### 5.7 SQL 語法要點
 
 ```sql
 -- 時間一律用 +8 小時（SQLite 沒有時區）
@@ -320,12 +354,35 @@ INSERT INTO menu_item (...) VALUES (...)
 -- 保留字 table 名要加雙引號
 SELECT * FROM "order" WHERE order_id = ?
 
--- Transaction 範例（外送訂單：先寫顧客、再寫訂單、最後扣庫存）
+-- Transaction 範例一：外送訂單（先寫顧客、再寫訂單、最後扣庫存）
 BEGIN;
   INSERT INTO delivery_customer (name, phone, address) VALUES (?, ?, ?);
   INSERT INTO "order" (order_id, customer_name, customer_phone, status, note) VALUES (?, ?, ?, 'pending', ?);
   INSERT INTO order_item (order_id, item_id, quantity) VALUES (?, ?, ?);
   UPDATE ingredient SET stock_qty = stock_qty - ? WHERE ingredient_id = ?;
+COMMIT;
+
+-- Transaction 範例二：驗收訂購單（合格入庫，不合格觸發退貨）
+BEGIN;
+  -- 1. 更新訂購單狀態與數量
+  UPDATE purchase_order
+     SET received_qty = ?, qualified_qty = ?,
+         status = CASE
+           WHEN ? = ordered_qty THEN 'received'
+           WHEN ? > 0 THEN 'partial'
+           ELSE 'returned'
+         END
+   WHERE po_id = ?;
+
+  -- 2. 合格數量入庫
+  UPDATE ingredient
+     SET stock_qty = stock_qty + ?
+   WHERE ingredient_id = ?;
+
+  -- 3. 有不合格就建立退貨單（qualified < received）
+  INSERT INTO return_order (po_id, return_date, return_qty, return_reason)
+  SELECT ?, datetime('now', '+8 hours'), ?, ?
+   WHERE ? < ?;   -- 只有不合格才會執行
 COMMIT;
 ```
 
