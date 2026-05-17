@@ -533,6 +533,8 @@ main           ← 正式版（只有 repo 擁有者能 merge）
 
 ### 10.1 初次環境建置
 
+> 📖 詳細圖文教學（從零 init Next.js）：[docs/getting-started.md](docs/getting-started.md)
+
 ```bash
 # 1. Clone 協作 repo
 git clone git@github.com:Chuannnn1/jinhaoke.git
