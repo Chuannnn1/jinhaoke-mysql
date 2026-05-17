@@ -137,7 +137,7 @@ bash scripts/setup.sh
 5. 啟用 Tailscale Funnel（對外暴露 3100 port）
 6. 顯示 Tailscale 產生的 public URL
 
-> ⚠️ 詳細腳本內容見 [附錄 A：setup.sh](#附錄-a-setupsh)
+> ⚠️ 詳細腳本內容見 [附錄 A：setup.sh](#附錄-a：setupsh)
 
 ### 3.3 啟動方式
 
