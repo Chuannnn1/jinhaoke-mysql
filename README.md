@@ -291,7 +291,7 @@ COMMIT;
 ## 6. API 開發規範
 
 > 所有 API Route 在 `app/api/` 底下，用 TypeScript 撰寫。
-> 詳細範例見 `docs/API-GUIDE.md` 及 `docs/jinhaoker-pos-api-demo.md`
+> 詳細範例見 [docs/menu-api-example.md](docs/menu-api-example.md)（含完整 Menu API TypeScript 程式碼）
 
 ### 6.1 統一回傳格式
 
