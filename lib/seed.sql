@@ -1,72 +1,133 @@
 -- ============================================================
--- 金濠客食堂 POS 系統 — 測試資料 Seed
+-- 金濠客食堂 POS 系統 — 測試資料 Seed v3
+-- 更新日期：2026-05-22
+-- 對應 schema.sql v3
 -- ============================================================
 
 -- ============================================================
 -- 供應商（supplier）
 -- ============================================================
-INSERT INTO supplier (name, contact_name, phone, address) VALUES
-  ('大成肉品', '王大強', '0921-111-222', '台北市肉品批發市場'),
-  ('全聯實業', '林小文', '0932-333-444', '全聯總倉'),
-  ('三商家購', '陳美華', '0943-444-555', '三商家購總部');
+INSERT INTO supplier (name, phone) VALUES
+  ('海鮮批發工', '05-2200001'),
+  ('肉品大王',   '05-2200002'),
+  ('大成肉品',   '05-2200003'),
+  ('糧油行',     '05-2200004'),
+  ('蔬果行',     '05-2200005');
 
 -- ============================================================
 -- 食材（ingredient）
+-- 格式：name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name
 -- ============================================================
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('排骨', '斤', 30, 10, 150, 1);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('白米', '公斤', 100, 30, 40, 2);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('麵條', '公斤', 20, 8, 35, 2);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('雞腿', '斤', 15, 5, 120, 1);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('高麗菜', '公斤', 25, 10, 30, 3);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('蔥', '把', 40, 15, 20, 3);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('豆皮', '片', 60, 20, 5, 2);
-INSERT INTO ingredient (name, unit, stock_qty, safety_stock, cost_per_unit, supplier_id) VALUES
-  ('貢丸', '斤', 20, 8, 80, 1);
+INSERT INTO ingredient VALUES
+  ('魚排',       30, 15, '片', '箱', 60, '海鮮批發工');
+INSERT INTO ingredient VALUES
+  ('豬排',       45, 20, '片', '箱', 60, '肉品大王');
+INSERT INTO ingredient VALUES
+  ('帶骨排骨',   32, 15, '片', '箱', 65, '大成肉品');
+INSERT INTO ingredient VALUES
+  ('紅麴豬',     28, 15, '份', '包', 20, '肉品大王');
+INSERT INTO ingredient VALUES
+  ('炸排骨',     8,  10, '份', '包', 15, '大成肉品');
+INSERT INTO ingredient VALUES
+  ('鱸雞腿',     22, 10, '隻', '包', 10, '肉品大王');
+INSERT INTO ingredient VALUES
+  ('蘇嫩雞腿',   15, 10, '隻', '包', 15, '大成肉品');
+INSERT INTO ingredient VALUES
+  ('牛肉',       60, 30, 'kg', '包', 2,  '肉品大王');
+INSERT INTO ingredient VALUES
+  ('豬肉',       50, 30, 'kg', '包', 2,  '肉品大王');
+INSERT INTO ingredient VALUES
+  ('沙茶雞',     6,  4,  'kg', '盒', 1,  '肉品大王');
+INSERT INTO ingredient VALUES
+  ('白米',       80, 30, '公斤', '包', 25, '糧油行');
+INSERT INTO ingredient VALUES
+  ('高麗菜',     30, 8,  '顆', '箱', 10, '蔬果行');
 
 -- ============================================================
--- 餐點（menu_item）
+-- 菜單（menu_item）
+-- 全量對齊 MOCK_MENU：emoji / tag / sub / option / description
 -- ============================================================
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('牛肉麵', '主食', 120, '紅燒湯頭', 50, 1);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('水餃', '主食', 80, '現包水餃', 80, 2);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('酸辣湯', '湯品', 50, '微辣', 60, 3);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('豆漿', '飲料', 25, '現磨', 100, 4);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('小菜一號', '小菜', 30, '豆干花生', 40, 5);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('雞腿飯', '主食', 100, '滷雞腿', 40, 6);
-INSERT INTO menu_item (name, category, price, description, stock_qty, sort_order) VALUES
-  ('陽春麵', '主食', 60, '清湯', 50, 7);
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('大比目魚排便當', '手作便當', 130, '🐟', '魚', '扁鱈', '', '扁鱈魚排配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥炸豬排便當', '手作便當', 130, '🐷', '豬', '', '', '酥炸厚切豬排配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥嫩雞腿便當', '手作便當', 130, '🍗', '雞', '', '', '酥嫩雞腿配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('紅麴豬五花便當', '手作便當', 120, '🐷', '豬', '', '', '紅麴豬五花配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥炸排骨便當', '手作便當', 100, '🐷', '豬', '無骨', '', '無骨酥炸排骨配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷豬腳便當', '手作便當', 100, '🐷', '豬', '', '', '滷豬腳配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷雞腿便當', '手作便當', 100, '🍗', '雞', '', '', '滷雞腿配三樣配菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷排骨便當', '手作便當', 100, '🥚', '豬', '帶骨·附滷蛋', '', '帶骨滷排骨附滷蛋配三樣配菜');
+
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('沙茶牛肉燴飯', '燴飯', 110, '🥩', '牛', '', '加肉60 / 加菜10', '沙茶牛肉');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('沙茶雞柳燴飯', '燴飯', 110, '🍗', '雞', '', '加肉60 / 加菜10', '沙茶雞柳');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('沙茶豬肉燴飯', '燴飯', 100, '🐷', '豬', '', '加肉50 / 加菜10', '沙茶豬肉');
+
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('大比目魚排', '單點', 100, '🐟', '魚', '扁鱈', '', '扁鱈魚排');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥炸豬排', '單點', 100, '🐷', '豬', '', '', '酥炸厚切豬排');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥嫩雞腿', '單點', 100, '🍗', '雞', '', '', '酥嫩雞腿');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('紅麴豬五花', '單點', 90, '🐷', '豬', '', '', '紅麴豬五花');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('沙茶燴牛肉', '單點', 90, '🥩', '牛', '', '加肉60 / 加菜10', '沙茶燴牛肉');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷排骨', '單點', 80, '🐷', '豬', '二片', '', '二片');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('沙茶燴豬肉', '單點', 80, '🐷', '豬', '', '加肉50 / 加菜10', '沙茶燴豬肉');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('酥炸排骨', '單點', 70, '🐷', '豬', '無骨', '', '無骨');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷雞腿', '單點', 70, '🍗', '雞', '', '', '滷雞腿');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('季節炒時蔬', '單點', 60, '🥬', '其他', '', '', '時令蔬菜');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('白飯', '單點', 20, '🍚', '其他', '', '', '白飯');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('滷蛋', '單點', 15, '🥚', '其他', '', '', '滷蛋');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('加購湯品', '單點', 10, '🍜', '其他', '', '', '例湯');
+INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
+  ('加購菜脯', '單點', 5, '🥢', '其他', '原味/辣味', '', '原味/辣味');
 
 -- ============================================================
--- 食譜（recipe）— 餐點組成（消耗哪些食材）
+-- 食譜（recipe）— 每份餐點消耗的食材（stock_unit）
 -- ============================================================
--- 牛肉麵：排骨(0.5斤) + 麵條(0.3公斤)
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (1, 1, 0.5);
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (1, 3, 0.3);
--- 水餃：麵條(0.2公斤) + 高麗菜(0.1公斤)
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (2, 3, 0.2);
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (2, 5, 0.1);
--- 酸辣湯：蔥(0.1把)
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (3, 6, 0.1);
--- 小菜一號：豆皮(3片) + 花生
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (5, 7, 3);
--- 雞腿飯：雞腿(0.8斤) + 白米(0.4公斤)
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (6, 4, 0.8);
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (6, 2, 0.4);
--- 陽春麵：麵條(0.3公斤) + 蔥(0.05把)
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (7, 3, 0.3);
-INSERT INTO recipe (item_id, ingredient_id, consume_qty) VALUES (7, 6, 0.05);
+-- 手作便當（item_id 1-8）
+INSERT INTO recipe VALUES (1, '魚排',  1);
+INSERT INTO recipe VALUES (1, '白米',  0.3);
+INSERT INTO recipe VALUES (2, '豬排',  1);
+INSERT INTO recipe VALUES (2, '白米',  0.3);
+INSERT INTO recipe VALUES (3, '鱸雞腿', 1);
+INSERT INTO recipe VALUES (3, '白米',  0.3);
+INSERT INTO recipe VALUES (4, '紅麴豬', 1);
+INSERT INTO recipe VALUES (4, '白米',  0.3);
+INSERT INTO recipe VALUES (5, '炸排骨', 1);
+INSERT INTO recipe VALUES (5, '白米',  0.3);
+INSERT INTO recipe VALUES (6, '帶骨排骨', 1);
+INSERT INTO recipe VALUES (6, '白米',  0.3);
+INSERT INTO recipe VALUES (7, '蘇嫩雞腿', 1);
+INSERT INTO recipe VALUES (7, '白米',  0.3);
+INSERT INTO recipe VALUES (8, '帶骨排骨', 1);
+INSERT INTO recipe VALUES (8, '白米',  0.3);
+
+-- 燴飯（item_id 9-11）
+INSERT INTO recipe VALUES (9,  '牛肉',  0.2);
+INSERT INTO recipe VALUES (9,  '白米',  0.3);
+INSERT INTO recipe VALUES (10, '沙茶雞', 0.15);
+INSERT INTO recipe VALUES (10, '白米',  0.3);
+INSERT INTO recipe VALUES (11, '豬肉',  0.2);
+INSERT INTO recipe VALUES (11, '白米',  0.3);
 
 -- ============================================================
 -- 外送顧客（delivery_customer）
@@ -77,37 +138,40 @@ INSERT INTO delivery_customer (phone, name, address) VALUES
   ('0944-567-890', '張小華', '台北市信義區基隆路');
 
 -- ============================================================
--- 顧客訂單（"order"）
+-- 顧客訂單（"order"）— status：待製作/製作中/待付款/已完成/已取消
 -- ============================================================
-INSERT INTO "order" (order_id, customer_name, customer_phone, status, note) VALUES
-  ('20260517001', '王小明', '0912-345-678', 'completed', '不要辣'),
-  ('20260517002', '陳小美', '0933-456-789', 'pending', ''),
-  ('20260517003', '張小華', '0944-567-890', 'cooking', '內用');
+INSERT INTO "order" (order_id, order_date, status, customer_phone) VALUES
+  ('20260525001', '2026-05-25', '已完成', '0912-345-678');
+INSERT INTO "order" (order_id, order_date, status, customer_phone) VALUES
+  ('20260525002', '2026-05-25', '待製作', '0933-456-789');
+INSERT INTO "order" (order_id, order_date, status, customer_phone) VALUES
+  ('20260525003', '2026-05-25', '製作中', '0944-567-890');
 
 -- ============================================================
--- 顧客訂單明細（order_item）
+-- 顧客訂單明細（order_item）— unit_price 為下單時的單價快照
 -- ============================================================
-INSERT INTO order_item (order_id, item_id, quantity) VALUES
-  ('20260517001', 1, 2),   -- 王小明：牛肉麵 x2
-  ('20260517001', 3, 1),   -- 王小明：酸辣湯 x1
-  ('20260517002', 2, 3),   -- 陳小美：水餃 x3
-  ('20260517002', 4, 2),   -- 陳小美：豆漿 x2
-  ('20260517003', 6, 1);   -- 張小華：雞腿飯 x1
+INSERT INTO order_item VALUES
+  ('20260525001', 1,  2, 130);  -- 王小明：大比目魚排便當 x2
+INSERT INTO order_item VALUES
+  ('20260525001', 9,  1, 110);  -- 王小明：沙茶牛肉燴飯 x1
+INSERT INTO order_item VALUES
+  ('20260525002', 2,  3, 130);  -- 陳小美：酥炸豬排便當 x3
+INSERT INTO order_item VALUES
+  ('20260525002', 22, 2, 20);   -- 陳小美：白飯 x2
+INSERT INTO order_item VALUES
+  ('20260525003', 5,  1, 100);  -- 張小華：酥炸排骨便當 x1
 
 -- ============================================================
--- 訂購單（purchase_order）— 每張只訂一種食材
+-- 進貨單（purchase_order）+ 明細（purchase_order_item）
 -- ============================================================
-INSERT INTO purchase_order (order_date, ingredient_id, ordered_qty, received_qty, qualified_qty, unit_price, status) VALUES
-  ('2026-05-15', 1, 10, 10, 10, 150, 'received');   -- 排骨：全數到貨合格
-INSERT INTO purchase_order (order_date, ingredient_id, ordered_qty, received_qty, qualified_qty, unit_price, status) VALUES
-  ('2026-05-15', 2, 20, 20, 20, 40, 'received');    -- 白米：全數到貨合格
-INSERT INTO purchase_order (order_date, ingredient_id, ordered_qty, received_qty, qualified_qty, unit_price, status) VALUES
-  ('2026-05-16', 4, 15, 13, 11, 120, 'partial');    -- 雞腿：到13斤，合格11斤（2斤退貨）
-INSERT INTO purchase_order (order_date, ingredient_id, ordered_qty, received_qty, qualified_qty, unit_price, status) VALUES
-  ('2026-05-17', 5, 10, 0, 0, 30, 'ordered');       -- 高麗菜：尚未到貨
+INSERT INTO purchase_order (po_date, supplier_name, total_amount, status) VALUES
+  ('2026-05-20', '大成肉品', 0, '已驗貨');
+INSERT INTO purchase_order_item (po_id, ingredient_name, order_qty, total_cost) VALUES
+  (1, '帶骨排骨', 65, 9750);  -- 65片 x 150元
 
--- ============================================================
--- 退貨單（return_order）— 只有部分驗收的那張訂購單有退貨
--- ============================================================
-INSERT INTO return_order (po_id, return_date, return_qty, return_reason) VALUES
-  (3, '2026-05-16', 2, '2 支雞腿外觀不良');
+INSERT INTO purchase_order (po_date, supplier_name, total_amount, status) VALUES
+  ('2026-05-22', '肉品大王', 0, '已訂購');
+INSERT INTO purchase_order_item (po_id, ingredient_name, order_qty, total_cost) VALUES
+  (2, '鱸雞腿', 10, 0);
+INSERT INTO purchase_order_item (po_id, ingredient_name, order_qty, total_cost) VALUES
+  (2, '蘇嫩雞腿', 15, 0);

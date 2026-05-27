@@ -1,195 +1,175 @@
 -- ============================================================
--- 金濠客食堂 POS 系統 — 資料庫 Schema
--- 更新版本：v2（2026-05-17）
--- 對齊 PDF 第柒節 ERD，共 10 張表
+-- 金濠客食堂 POS 系統 — 資料庫 Schema v3
+-- 更新日期：2026-05-22（對齊 PDF 2026/5/20 版）
+-- 設計決策：
+--   1. 食材/供應商 PK 用 name（非 ID）
+--   2. 進貨單拆成主表 + 明細（2NF）
+--   3. order_item 存餐點單價快照（漲價不影響歷史）
+--   4. 庫存於出餐時扣除，非下單時
+--   5. 新增叫貨單位（order_unit / qty_per_order_unit）
 -- ============================================================
 
+PRAGMA foreign_keys = ON;
+
 -- ============================================================
--- 1. 供應商（supplier）
+-- (1) 供應商 supplier — PK 用 name
 -- ============================================================
 CREATE TABLE IF NOT EXISTS supplier (
-    supplier_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-    name          TEXT    NOT NULL UNIQUE,
-    contact_name  TEXT,
-    phone         TEXT,
-    address       TEXT,
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours'))
+    name        TEXT    PRIMARY KEY,           -- 供應商名稱
+    phone       TEXT
 );
 
 -- ============================================================
--- 2. 食材（ingredient）
+-- (2) 食材 ingredient — PK 用 name（含叫貨單位設計）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS ingredient (
-    ingredient_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    name               TEXT    NOT NULL UNIQUE,
-    unit               TEXT    NOT NULL,          -- 單位：斤、公斤、包、 ...
-    stock_qty          REAL    NOT NULL DEFAULT 0,
-    safety_stock       REAL    NOT NULL DEFAULT 0,   -- 安全庫存
-    cost_per_unit      REAL    NOT NULL DEFAULT 0,   -- 成本（用於自動補貨計算）
-    supplier_id        INTEGER NOT NULL,
-    created_at         TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    FOREIGN KEY (supplier_id) REFERENCES supplier(supplier_id)
-        ON UPDATE CASCADE ON DELETE RESTRICT
+    name               TEXT    PRIMARY KEY,       -- 食材名稱（PK）
+    stock_qty          REAL    NOT NULL DEFAULT 0,  -- 庫存數量（stock_unit 下的量）
+    safety_stock       REAL    NOT NULL DEFAULT 0,  -- 安全存量
+    stock_unit         TEXT    NOT NULL,            -- 庫存計量單位（片 / 隻 / kg）
+    order_unit         TEXT    NOT NULL,            -- 叫貨單位（箱 / 包 / 盒）
+    qty_per_order_unit REAL    NOT NULL,            -- 每個叫貨單位 = 多少 stock_unit
+    supplier_name      TEXT,                        -- FK → supplier.name
+    FOREIGN KEY (supplier_name) REFERENCES supplier(name)
+        ON UPDATE CASCADE ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_ingredient_supplier ON ingredient(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_ingredient_supplier ON ingredient(supplier_name);
 CREATE INDEX IF NOT EXISTS idx_ingredient_low_stock ON ingredient(stock_qty);
 
 -- ============================================================
--- 3. 餐點（menu_item）
+-- (3) 餐點 menu_item
+--   emoji  : 暫時顯示（未來替換成上傳照片）
+--   tag    : 蛋白質分類（魚/豬/雞/牛/其他）— 前台篩選用
+--   sub    : 副標說明（扁鱈/無骨/二片）
+--   option : 加購說明（加肉60/加菜10）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS menu_item (
-    item_id               INTEGER PRIMARY KEY AUTOINCREMENT,
-    name                  TEXT    NOT NULL,
-    category              TEXT    NOT NULL,
-    price                 REAL    NOT NULL,
-    description           TEXT    DEFAULT '',
-    is_active             INTEGER NOT NULL DEFAULT 1,   -- 1=上架中, 0=已下架
-    stock_qty             INTEGER NOT NULL DEFAULT 0,  -- 可供應份數（由原料庫存推算）
-    low_stock_threshold   INTEGER NOT NULL DEFAULT 10,  -- 低庫存警示份數
-    sort_order            INTEGER NOT NULL DEFAULT 0,
-    created_at            TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    updated_at            TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours'))
+    item_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    name         TEXT    NOT NULL UNIQUE,
+    category     TEXT,
+    price        INTEGER NOT NULL,
+    emoji        TEXT    NOT NULL DEFAULT '',
+    tag          TEXT    NOT NULL DEFAULT '其他',
+    sub          TEXT    NOT NULL DEFAULT '',
+    option       TEXT    NOT NULL DEFAULT '',
+    description  TEXT,
+    is_active    INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE INDEX IF NOT EXISTS idx_menu_category ON menu_item(category);
 CREATE INDEX IF NOT EXISTS idx_menu_active ON menu_item(is_active);
+CREATE INDEX IF NOT EXISTS idx_menu_tag ON menu_item(tag);
 
 -- ============================================================
--- 4. 食譜（recipe）— 餐點 M:N 食材的 junction table
+-- (4) 食譜 recipe — 餐點 M:N 食材（配方）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS recipe (
-    recipe_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id        INTEGER NOT NULL,
-    ingredient_id  INTEGER NOT NULL,
-    consume_qty    REAL    NOT NULL,           -- 每份餐點消耗該食材的數量
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    FOREIGN KEY (item_id)       REFERENCES menu_item(item_id)
+    item_id          INTEGER NOT NULL,
+    ingredient_name  TEXT    NOT NULL,           -- FK → ingredient.name
+    consume_qty      REAL    NOT NULL,           -- 每份餐點消耗多少（stock_unit）
+    PRIMARY KEY (item_id, ingredient_name),
+    FOREIGN KEY (item_id) REFERENCES menu_item(item_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (ingredient_id) REFERENCES ingredient(ingredient_id)
-        ON UPDATE CASCADE ON DELETE RESTRICT,
-    UNIQUE (item_id, ingredient_id)
+    FOREIGN KEY (ingredient_name) REFERENCES ingredient(name)
+        ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 CREATE INDEX IF NOT EXISTS idx_recipe_item ON recipe(item_id);
-CREATE INDEX IF NOT EXISTS idx_recipe_ingredient ON recipe(ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredient ON recipe(ingredient_name);
 
 -- ============================================================
--- 5. 外送顧客（delivery_customer）— 對應 PDF「外送顧客單」
+-- (5) 外送顧客單 delivery_customer
 -- ============================================================
 CREATE TABLE IF NOT EXISTS delivery_customer (
-    phone      TEXT    PRIMARY KEY,             -- 電話為 PK
-    name       TEXT    NOT NULL,
-    address    TEXT    NOT NULL,
-    created_at TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours'))
+    phone        TEXT    PRIMARY KEY,            -- 顧客電話（PK）
+    house_number TEXT,                           -- 號碼
+    address      TEXT,                           -- 地址
+    name         TEXT
 );
 
 -- ============================================================
--- 6. 顧客訂單（"order"）— 注意使用雙引號因為 order 是 SQL 保留字
+-- (6) 顧客訂單 "order"
 -- ============================================================
 CREATE TABLE IF NOT EXISTS "order" (
-    order_id         TEXT    PRIMARY KEY,
-    customer_name    TEXT    NOT NULL,
-    customer_phone   TEXT    NOT NULL,
-    status           TEXT    NOT NULL DEFAULT 'pending'
-                     CHECK (status IN ('pending', 'cooking', 'delivering', 'completed', 'cancelled')),
-    note             TEXT    DEFAULT '',
-    created_at       TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
+    order_id       TEXT    PRIMARY KEY,          -- YYYYMMDD + 4碼流水號
+    order_date     TEXT    NOT NULL,
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
+    updated_at     TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
+    status         TEXT    NOT NULL DEFAULT '待製作'
+                   CHECK (status IN ('待製作','製作中','待付款','已完成','已取消')),
+    customer_phone TEXT,                          -- 內用可 NULL
     FOREIGN KEY (customer_phone) REFERENCES delivery_customer(phone)
-        ON UPDATE CASCADE ON DELETE RESTRICT
+        ON UPDATE CASCADE ON DELETE SET NULL
 );
 
+CREATE INDEX IF NOT EXISTS idx_order_date ON "order"(order_date);
 CREATE INDEX IF NOT EXISTS idx_order_status ON "order"(status);
-CREATE INDEX IF NOT EXISTS idx_order_created ON "order"(created_at);
 CREATE INDEX IF NOT EXISTS idx_order_phone ON "order"(customer_phone);
 
 -- ============================================================
--- 7. 顧客訂單明細（order_item）— 對應 PDF「顧客訂單-包含」
+-- (7) 顧客訂單-包含 order_item
+--     ★ 存單價快照（漲價不影響歷史訂單）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS order_item (
-    order_id   TEXT,
-    item_id    INTEGER,
-    quantity   INTEGER NOT NULL,
+    order_id     TEXT    NOT NULL,
+    item_id      INTEGER NOT NULL,
+    quantity     INTEGER NOT NULL CHECK (quantity > 0),
+    unit_price   INTEGER NOT NULL,               -- ★ 下單時的單價快照
     PRIMARY KEY (order_id, item_id),
     FOREIGN KEY (order_id) REFERENCES "order"(order_id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    FOREIGN KEY (item_id)  REFERENCES menu_item(item_id)
+    FOREIGN KEY (item_id) REFERENCES menu_item(item_id)
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 -- ============================================================
--- 8. 訂購單（purchase_order）— 對應 PDF「訂購單」
--- 設計原則：一張單只訂一種食材（業務假設）
+-- (8) 進貨單 purchase_order（主表）— 含 total_amount
 -- ============================================================
 CREATE TABLE IF NOT EXISTS purchase_order (
     po_id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    order_date     TEXT    NOT NULL,
-    ingredient_id  INTEGER NOT NULL,              -- FK 到食材（同時鏈至供應商）
-    ordered_qty    REAL    NOT NULL,              -- 訂購數量
-    received_qty   REAL    DEFAULT 0,              -- 實際到貨量
-    qualified_qty  REAL    DEFAULT 0,              -- 合格數量（入庫量）
-    unit_price     REAL    NOT NULL,               -- 單價
-    status         TEXT    NOT NULL DEFAULT 'ordered'
-                     CHECK (status IN ('ordered', 'received', 'partial', 'returned')),
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    FOREIGN KEY (ingredient_id) REFERENCES ingredient(ingredient_id)
+    po_date        TEXT    NOT NULL,
+    supplier_name  TEXT    NOT NULL,
+    total_amount   REAL    NOT NULL DEFAULT 0,    -- 總金額（驗貨後彙總）
+    status         TEXT    NOT NULL DEFAULT '已訂購'
+                   CHECK (status IN ('已訂購','已驗貨','部分退貨')),
+    FOREIGN KEY (supplier_name) REFERENCES supplier(name)
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
-CREATE INDEX IF NOT EXISTS idx_po_ingredient  ON purchase_order(ingredient_id);
-CREATE INDEX IF NOT EXISTS idx_po_order_date  ON purchase_order(order_date);
-CREATE INDEX IF NOT EXISTS idx_po_status      ON purchase_order(status);
+CREATE INDEX IF NOT EXISTS idx_po_date ON purchase_order(po_date);
+CREATE INDEX IF NOT EXISTS idx_po_supplier ON purchase_order(supplier_name);
+CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_order(status);
 
 -- ============================================================
--- 9. 退貨單（return_order）— 對應 PDF「退貨單」
--- 設計原則：每張訂購單最多產生一張退貨單（1:1）
--- 退貨只退該訂購單對應的那一種食材，不需要子表
+-- (9) 進貨單明細 purchase_order_item
+-- ============================================================
+CREATE TABLE IF NOT EXISTS purchase_order_item (
+    po_id            INTEGER NOT NULL,
+    ingredient_name  TEXT    NOT NULL,
+    order_qty        REAL    NOT NULL,           -- 進貨數量（stock_unit）
+    total_cost       REAL    NOT NULL DEFAULT 0, -- 總成本（驗貨後填入）
+    PRIMARY KEY (po_id, ingredient_name),
+    FOREIGN KEY (po_id) REFERENCES purchase_order(po_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_name) REFERENCES ingredient(name)
+        ON UPDATE CASCADE ON DELETE RESTRICT
+);
+
+-- ============================================================
+-- (10) 退貨單 return_order
+--     複合 FK 參考 purchase_order_item（po_id, ingredient_name）
 -- ============================================================
 CREATE TABLE IF NOT EXISTS return_order (
-    return_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-    po_id          INTEGER NOT NULL UNIQUE,        -- 1:1 對應訂購單
-    return_date    TEXT    NOT NULL,
-    return_qty     REAL    NOT NULL,               -- 退貨食材數量
-    return_reason  TEXT    DEFAULT '',
-    created_at     TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    FOREIGN KEY (po_id) REFERENCES purchase_order(po_id)
+    po_id            INTEGER NOT NULL,
+    ingredient_name  TEXT    NOT NULL,
+    return_date      TEXT    NOT NULL,
+    return_reason    TEXT,
+    return_qty       REAL    NOT NULL,
+    PRIMARY KEY (po_id, ingredient_name),
+    FOREIGN KEY (po_id, ingredient_name)
+        REFERENCES purchase_order_item(po_id, ingredient_name)
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_return_po ON return_order(po_id);
-
--- ============================================================
--- 10. 庫存異動紀錄（inventory_log）— 實作輔助表
--- ============================================================
-CREATE TABLE IF NOT EXISTS inventory_log (
-    log_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    item_id      INTEGER,                          -- 可為 NULL（純原料異動時）
-    ingredient_id INTEGER,                         -- 可為 NULL（餐點異動時）
-    change_qty   REAL    NOT NULL,                 -- 變動數量（可正可負）
-    reason       TEXT    NOT NULL,
-    order_id     TEXT,                             -- 關聯訂單（可為 NULL）
-    po_id        INTEGER,                          -- 關聯訂購單（可為 NULL）
-    created_at   TEXT    NOT NULL DEFAULT (datetime('now', '+8 hours')),
-    FOREIGN KEY (item_id)       REFERENCES menu_item(item_id)
-        ON UPDATE CASCADE ON DELETE SET NULL,
-    FOREIGN KEY (ingredient_id) REFERENCES ingredient(ingredient_id)
-        ON UPDATE CASCADE ON DELETE SET NULL,
-    FOREIGN KEY (order_id)      REFERENCES "order"(order_id)
-        ON UPDATE CASCADE ON DELETE SET NULL,
-    FOREIGN KEY (po_id)         REFERENCES purchase_order(po_id)
-        ON UPDATE CASCADE ON DELETE SET NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_log_ingredient ON inventory_log(ingredient_id);
-CREATE INDEX IF NOT EXISTS idx_log_item      ON inventory_log(item_id);
-CREATE INDEX IF NOT EXISTS idx_log_created   ON inventory_log(created_at);
-
--- ============================================================
--- Trigger：更新 menu_item.updated_at
--- ============================================================
-CREATE TRIGGER IF NOT EXISTS trg_menu_updated
-AFTER UPDATE ON menu_item
-BEGIN
-    UPDATE menu_item SET updated_at = datetime('now', '+8 hours')
-    WHERE item_id = NEW.item_id;
-END;

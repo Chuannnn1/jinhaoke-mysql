@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --gold-50:  #FBF7F0;
+  --gold-100: #F5EBDA;
+  --gold-200: #E8D5B0;
+  --gold-400: #C4A265;
+  --gold-500: #A8893E;
+  --gold-600: #8B7030;
+
+  --charcoal-900: #1A1A1A;
+  --charcoal-800: #2D2D2D;
+  --charcoal-700: #3D3D3D;
+  --charcoal-100: #F5F5F5;
+
+  --cream-white: #FFFDF8;
+
+  --danger:  #C0392B;
+  --success: #5A8F5A;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--gold-50);
+  color: var(--charcoal-900);
+  font-family: 'DM Sans', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ========== 共用元件層 ========== */
+
+@layer components {
+
+  .btn-primary {
+    @apply bg-gold-400 hover:bg-gold-600 text-white font-medium py-2.5 px-5 rounded-md transition-colors duration-200;
+  }
+
+  .btn-danger {
+    @apply bg-danger hover:bg-red-700 text-white font-medium py-2.5 px-5 rounded-md transition-colors duration-200;
+  }
+
+  .card {
+    @apply bg-cream rounded-lg shadow-card border border-gold-200/30;
+  }
+
+  .card-hover {
+    @apply hover:-translate-y-0.5 hover:shadow-elevated transition-all duration-200 cursor-pointer;
+  }
+
+}
