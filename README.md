@@ -280,7 +280,47 @@ git pull             # 拉取並合併
 
 | 文件 | 用途 |
 |------|------|
-| [docs/README.md](docs/README.md) | 1. 檔案架構（當前完整目錄樹） |
+| [README.md](README.md) | 1. 檔案架構（完整目錄樹 + 五層流程圖） |
 | [docs/api-reference.md](docs/api-reference.md) | 2. 全部 26 支 API 的 request / response 格式 |
 | [docs/api-guide.md](docs/api-guide.md) | 3. GET / POST / PUT / PATCH / DELETE 差異說明 + 10點實作檢查清單 |
-| [docs/schema-reference.md](docs/schema-reference.md) | 4. Schema v3 完整規劃（10張表欄位說明 + 未來系統藍圖）|
+| [docs/schema-reference.md](docs/schema-reference.md) | 4. Schema v3 完整說明（10張表欄位 + 設計決策）|
+
+---
+
+## Git 協作規範
+
+影片說明（15分鐘）：https://youtu.be/P-nbNgIzlYE
+
+### Branch 命名
+
+| 類型 | 範例 | 用途 |
+|------|------|------|
+| 功能 | `feat/menu-api` | 新功能開發 |
+| 修正 | `fix/order-status-bug` | Bug 修復 |
+| 文件 | `docs/api-reference` | 文件更新 |
+
+### Commit 訊息格式
+
+```
+<type>: <簡短說明>
+
+[type] 可用：
+  feat   — 新功能
+  fix    — 修正 bug
+  docs   — 文件異動
+  refactor — 重構（不影響功能）
+  chore  — 雜項（相依更新、脚本等）
+```
+
+### 合併流程
+
+```
+main（隨時可部署）
+  └── feat/menu-api（功能完成後）
+          │
+          ├── PR → Code Review（由 Chaeryeong 負責）
+          │
+          └── Merge（squash merge 進 main）
+```
+
+> **重要**：所有變更透過 PR 併入 main，不要直接 push 到 main。
