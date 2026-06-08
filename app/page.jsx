@@ -52,26 +52,32 @@ export default function CustomerOrderPage() {
   const [customerNote, setCustomerNote] = useState('')
   const [orderDone, setOrderDone] = useState(false)
   const [justOrdered, setJustOrdered] = useState(null)
+  // item_id → { blocked, max_servings }
+  const [availability, setAvailability] = useState({})
 
   // ---- 抓 API 取得真實 item_id ----
   useEffect(() => {
-    fetch('/api/menu')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.data.length > 0) {
-          setMenu(data.data)
-        } else {
-          // API 回成功但沒資料，使用 fallback
-          setMenu(FALLBACK_MENU)
-        }
-        setMenuLoading(false)
-      })
-      .catch(err => {
-        console.error('無法取得菜單，使用 fallback：', err)
+    Promise.all([
+      fetch('/api/menu').then(r => r.json()).catch(() => ({ success: false })),
+      fetch('/api/menu/availability').then(r => r.json()).catch(() => ({ success: false })),
+    ]).then(([menuData, availData]) => {
+      if (menuData.success && menuData.data.length > 0) {
+        setMenu(menuData.data)
+      } else {
         setMenu(FALLBACK_MENU)
-        setMenuLoading(false)
-      })
+      }
+      if (availData.success && Array.isArray(availData.data)) {
+        const map = {}
+        for (const a of availData.data) {
+          map[a.item_id] = { blocked: !!a.blocked, max_servings: a.max_servings }
+        }
+        setAvailability(map)
+      }
+      setMenuLoading(false)
+    })
   }, [])
+
+  const isBlocked = (itemId) => availability[itemId]?.blocked === true
 
   // ---- 衍生資料 ----
   const filteredMenu = activeTag === '全部'
@@ -80,6 +86,7 @@ export default function CustomerOrderPage() {
 
   // ---- 函式 ----
   const addToCart = (item) => {
+    if (isBlocked(item.item_id)) return
     setCart(prev => {
       const existing = prev.find(i => i.item_id === item.item_id)
       if (existing) {
@@ -228,39 +235,54 @@ export default function CustomerOrderPage() {
                   {cat}
                 </h3>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-                  {catItems.map(item => (
-                    <button
-                      key={item.item_id}
-                      onClick={() => addToCart(item)}
-                      className="bg-white border border-border rounded-lg text-left flex flex-col h-full overflow-hidden hover:shadow-md hover:-translate-y-0.5 transition-[box-shadow,transform] duration-150"
-                    >
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt={item.name}
-                          className="h-24 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="h-24 bg-gray-50 flex items-center justify-center text-xs text-gray-400 px-2 text-center">
-                          老闆還未上傳圖片~
+                  {catItems.map(item => {
+                    const blocked = isBlocked(item.item_id)
+                    return (
+                      <button
+                        key={item.item_id}
+                        onClick={() => addToCart(item)}
+                        disabled={blocked}
+                        className={`bg-white border border-border rounded-lg text-left flex flex-col h-full overflow-hidden transition-[box-shadow,transform] duration-150 ${
+                          blocked
+                            ? 'opacity-50 grayscale cursor-not-allowed'
+                            : 'hover:shadow-md hover:-translate-y-0.5'
+                        }`}
+                      >
+                        <div className="relative">
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="h-24 w-full object-cover"
+                            />
+                          ) : (
+                            <div className="h-24 bg-gray-50 flex items-center justify-center text-xs text-gray-400 px-2 text-center">
+                              老闆還未上傳圖片~
+                            </div>
+                          )}
+                          {blocked && (
+                            <span className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm font-semibold tracking-wide">
+                              售完
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <div className="p-3 flex flex-col flex-1">
-                        <p className="text-[13px] font-semibold text-ink leading-tight">
-                          {item.name}
-                        </p>
-                        {item.sub && (
-                          <p className="text-[11px] text-ink-mute mt-0.5">{item.sub}</p>
-                        )}
-                        {item.option && (
-                          <p className="text-[10px] text-ink-faint mt-0.5">{item.option}</p>
-                        )}
-                        <p className="font-mono text-[14px] font-bold text-clay mt-auto pt-1">
-                          ${item.price}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
+                        <div className="p-3 flex flex-col flex-1">
+                          <p className="text-[13px] font-semibold text-ink leading-tight">
+                            {item.name}
+                          </p>
+                          {item.sub && (
+                            <p className="text-[11px] text-ink-mute mt-0.5">{item.sub}</p>
+                          )}
+                          {item.option && (
+                            <p className="text-[10px] text-ink-faint mt-0.5">{item.option}</p>
+                          )}
+                          <p className="font-mono text-[14px] font-bold text-clay mt-auto pt-1">
+                            ${item.price}
+                          </p>
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </section>
             )
