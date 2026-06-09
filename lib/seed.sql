@@ -48,21 +48,21 @@ INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, q
 -- 全量對齊 MOCK_MENU：emoji / tag / sub / option / description
 -- ============================================================
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('大比目魚排便當', '便當', 130, '🐟', '魚', '扁鱈', '', '扁鱈魚排配三樣配菜');
+  ('大比目魚排便當', '手作便當', 130, '🐟', '魚', '扁鱈', '', '扁鱈魚排配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('酥炸豬排便當', '便當', 130, '🐷', '豬', '', '', '酥炸厚切豬排配三樣配菜');
+  ('酥炸豬排便當', '手作便當', 130, '🐷', '豬', '', '', '酥炸厚切豬排配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('酥嫩雞腿便當', '便當', 130, '🍗', '雞', '', '', '酥嫩雞腿配三樣配菜');
+  ('酥嫩雞腿便當', '手作便當', 130, '🍗', '雞', '', '', '酥嫩雞腿配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('紅麴豬五花便當', '便當', 120, '🐷', '豬', '', '', '紅麴豬五花配三樣配菜');
+  ('紅麴豬五花便當', '手作便當', 120, '🐷', '豬', '', '', '紅麴豬五花配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('酥炸排骨便當', '便當', 100, '🐷', '豬', '無骨', '', '無骨酥炸排骨配三樣配菜');
+  ('酥炸排骨便當', '手作便當', 100, '🐷', '豬', '無骨', '', '無骨酥炸排骨配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('滷豬腳便當', '便當', 100, '🐷', '豬', '', '', '滷豬腳配三樣配菜');
+  ('滷豬腳便當', '手作便當', 100, '🐷', '豬', '', '', '滷豬腳配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('滷雞腿便當', '便當', 100, '🍗', '雞', '', '', '滷雞腿配三樣配菜');
+  ('滷雞腿便當', '手作便當', 100, '🍗', '雞', '', '', '滷雞腿配三樣配菜');
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
-  ('滷排骨便當', '便當', 100, '🥚', '豬', '帶骨·附滷蛋', '', '帶骨滷排骨附滷蛋配三樣配菜');
+  ('滷排骨便當', '手作便當', 100, '🥚', '豬', '帶骨·附滷蛋', '', '帶骨滷排骨附滷蛋配三樣配菜');
 
 INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description) VALUES
   ('沙茶牛肉燴飯', '燴飯', 110, '🥩', '牛', '', '加肉60 / 加菜10', '沙茶牛肉');

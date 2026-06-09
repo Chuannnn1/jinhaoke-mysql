@@ -1,0 +1,72 @@
+
+> jinhaoke-pos@1.0.0 dev
+> next dev -p 3100
+
+ ⨯ Failed to start server
+Error: listen EADDRINUSE: address already in use ::: ✓ Ready in 24.2s
+ ✓ Compiled / in 392ms (60 modules)
+ ○ Compiling /api/inventory ...
+ ✓ Compiled /api/inventory in 2s (483 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/inventory 200 in 2886ms
+ GET /api/menu 200 in 4009ms
+ GET / 200 in 4153ms
+ ○ Compiling /api/purchase-orders ...
+ ✓ Compiled /api/purchase-orders in 3.2s (261 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/purchase-orders 200 in 3450ms
+ ✓ Compiled /admin/purchase-orders in 501ms (498 modules)
+ GET /admin/purchase-orders 200 in 2542ms
+ ✓ Compiled /admin/purchase in 321ms (504 modules)
+ GET /admin/purchase 200 in 504ms
+ GET / 200 in 82ms
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/menu 200 in 39ms
+ GET /api/inventory 200 in 14ms
+ ✓ Compiled /admin/menu in 372ms (510 modules)
+ GET /admin/menu 200 in 596ms
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ POST /api/purchase-orders 400 in 28ms
+ ✓ Compiled /api/suppliers in 213ms (279 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/suppliers 200 in 291ms
+[POST /api/purchase-orders] SqliteError: UNIQUE constraint failed: purchase_order_item.po_id, purchase_order_item.ingredient_name
+    at eval (webpack-internal:///(rsc)/./app/api/purchase-orders/route.ts:117:12)
+    at sqliteTransaction (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\better-sqlite3\lib\methods\transaction.js:65:24)
+    at POST (webpack-internal:///(rsc)/./app/api/purchase-orders/route.ts:119:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:57228
+    at async eT.execute (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:46851)
+    at async eT.handle (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\compiled\next-server\app-route.runtime.dev.js:6:58760)
+    at async doRender (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:1366:42)
+    at async cacheEntry.responseCache.get.routeKind (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:1588:28)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:1496:28)
+    at async DevServer.renderPageComponent (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:1924:24)
+    at async DevServer.renderToResponseImpl (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:1962:32)
+    at async DevServer.pipeImpl (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:922:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\next-server.js:272:17)
+    at async DevServer.handleRequestImpl (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\base-server.js:818:17)
+    at async C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\dev\next-dev-server.js:339:20
+    at async Span.traceAsyncFn (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\trace\trace.js:154:20)
+    at async DevServer.handleRequest (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\dev\next-dev-server.js:336:24)
+    at async invokeRender (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\lib\router-server.js:179:21)
+    at async handleRequest (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\lib\router-server.js:359:24)
+    at async requestHandlerImpl (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\lib\router-server.js:383:13)
+    at async Server.requestListener (C:\Users\Chuannnn\Documents\GitHub\jinhaoke\node_modules\next\dist\server\lib\start-server.js:141:13) {
+  code: 'SQLITE_CONSTRAINT_PRIMARYKEY'
+}
+ POST /api/purchase-orders 500 in 28ms
+ GET / 200 in 92ms
+ ✓ Compiled /api/orders in 235ms (282 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/orders 200 in 364ms
+ ✓ Compiled /api/orders/import in 217ms (284 modules)
+POST /api/orders/import error: TypeError: Content-Type was not one of "multipart/form-data" or "application/x-www-form-urlencoded".
+    at node:internal/deps/undici/undici:6379:19
+    at successSteps (node:internal/deps/undici/undici:6414:27)
+    at readAllBytes (node:internal/deps/undici/undici:5380:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+ POST /api/orders/import 500 in 298ms
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ POST /api/orders/import 200 in 24ms
+ POST /api/purchase-orders 201 in 32ms

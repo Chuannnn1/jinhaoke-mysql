@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 
 interface PurchaseOrder {
   po_id: number
@@ -12,6 +12,12 @@ interface PurchaseOrder {
 
 interface Supplier {
   name: string
+}
+
+interface Ingredient {
+  name: string
+  stock_unit: string
+  supplier_name: string | null
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -27,6 +33,7 @@ function formatMoney(n: number) {
 export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'list' | 'create'>('list')
   const [selectedPo, setSelectedPo] = useState<PurchaseOrder | null>(null)
@@ -56,10 +63,35 @@ export default function PurchaseOrdersPage() {
     } catch { /* ignore */ }
   }, [])
 
+  const fetchIngredients = useCallback(async () => {
+    try {
+      const res = await fetch('/api/inventory')
+      const data = await res.json()
+      if (data.success) {
+        setIngredients(
+          (data.data as Ingredient[]).map(i => ({
+            name: i.name,
+            stock_unit: i.stock_unit,
+            supplier_name: i.supplier_name,
+          }))
+        )
+      }
+    } catch { /* ignore */ }
+  }, [])
+
   useEffect(() => {
     fetchOrders()
     fetchSuppliers()
-  }, [fetchOrders, fetchSuppliers])
+    fetchIngredients()
+  }, [fetchOrders, fetchSuppliers, fetchIngredients])
+
+  // 依供應商過濾食材；未選供應商則顯示全部
+  const ingredientOptions = useMemo(() => {
+    if (!newSupplier) return ingredients
+    return ingredients.filter(
+      ing => ing.supplier_name === newSupplier || !ing.supplier_name
+    )
+  }, [ingredients, newSupplier])
 
   const addItemRow = () => {
     setNewItems(prev => [...prev, { ingredient_name: '', order_qty: '', total_cost: '' }])
@@ -161,6 +193,10 @@ export default function PurchaseOrdersPage() {
         </header>
 
         <main className="flex-1 overflow-auto p-6 bg-gray-50">
+          <div className="mb-4 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center justify-between">
+            <span>此為舊版採購頁，已有新版採購管理（庫存連動 / 改進的下拉）。</span>
+            <a href="/admin/purchase" className="font-semibold text-amber-900 hover:underline">前往新版 →</a>
+          </div>
           {tab === 'list' ? (
             <div className="space-y-4">
               {loading ? (
@@ -263,39 +299,55 @@ export default function PurchaseOrdersPage() {
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {newItems.map((item, idx) => (
-                      <div key={idx} className="flex gap-2 items-center">
-                        <input
-                          type="text"
-                          placeholder="食材名稱"
-                          value={item.ingredient_name}
-                          onChange={e => updateItem(idx, 'ingredient_name', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-                        />
-                        <input
-                          type="number"
-                          placeholder="數量"
-                          value={item.order_qty}
-                          onChange={e => updateItem(idx, 'order_qty', e.target.value)}
-                          className="w-24 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-                        />
-                        <input
-                          type="number"
-                          placeholder="成本"
-                          value={item.total_cost}
-                          onChange={e => updateItem(idx, 'total_cost', e.target.value)}
-                          className="w-28 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-                        />
-                        {newItems.length > 1 && (
-                          <button
-                            onClick={() => removeItem(idx)}
-                            className="text-ink/30 hover:text-red-500 transition-colors"
+                    {newItems.map((item, idx) => {
+                      const selected = ingredients.find(i => i.name === item.ingredient_name)
+                      return (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <select
+                            value={item.ingredient_name}
+                            onChange={e => updateItem(idx, 'ingredient_name', e.target.value)}
+                            className="flex-1 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay bg-white"
                           >
-                            ✕
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                            <option value="">請選擇食材</option>
+                            {ingredientOptions.map(ing => (
+                              <option key={ing.name} value={ing.name}>
+                                {ing.name} ({ing.stock_unit})
+                                {ing.supplier_name ? ` - ${ing.supplier_name}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <div className="relative w-24">
+                            <input
+                              type="number"
+                              placeholder="數量"
+                              value={item.order_qty}
+                              onChange={e => updateItem(idx, 'order_qty', e.target.value)}
+                              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
+                            />
+                            {selected && (
+                              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-ink/40">
+                                {selected.stock_unit}
+                              </span>
+                            )}
+                          </div>
+                          <input
+                            type="number"
+                            placeholder="成本"
+                            value={item.total_cost}
+                            onChange={e => updateItem(idx, 'total_cost', e.target.value)}
+                            className="w-28 px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
+                          />
+                          {newItems.length > 1 && (
+                            <button
+                              onClick={() => removeItem(idx)}
+                              className="text-ink/30 hover:text-red-500 transition-colors"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
 

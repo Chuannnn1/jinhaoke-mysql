@@ -154,6 +154,11 @@ export async function POST(request: Request) {
     const orderDate = dateParse.date!
     const ymdCompact = dateParse.ymdCompact!
 
+    // 今日日期（台灣時區 UTC+8）：用來判斷是否「過去訂單」
+    // 過去訂單一律強制 status='已完成'，避免出現在 admin kanban 的「待製作/製作中/待付款」欄
+    const todayISO = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    const isPastOrder = orderDate !== todayISO
+
     const text = await (file as File).text()
     const { header, rows } = parseCsv(text)
 
@@ -284,7 +289,8 @@ export async function POST(request: Request) {
     // 組合預覽訂單
     const valid: ValidOrderPreview[] = parsedRows.map(r => {
       const orderId = `A${ymdCompact}${String(r.daily_seq).padStart(4, '0')}`
-      const status = r.paid ? '已完成' : '待付款'
+      // 過去訂單 → 強制「已完成」（不論 CSV 付款狀態），不要污染今日 kanban
+      const status = isPastOrder ? '已完成' : (r.paid ? '已完成' : '待付款')
       const items: ValidItemPreview[] = r.items.map((it, idx) => {
         const mapped = mapping[String(it.code)]
         const menu = mapped ? menuById.get(mapped) : undefined

@@ -7,11 +7,11 @@ import { useState, useEffect, useCallback } from 'react'
 // 食材分類標籤
 const PROTEIN_TAGS = ['全部', '豬', '雞', '牛', '魚', '其他']
 
-// 餐點分類 section 顯示順序（DB migrate 後一律是「便當」）
-const CATEGORY_SECTIONS = ['便當', '燴飯', '單點', '飲料']
-// 舊資料 backward compat：「手作便當」歸到「便當」section
+// 餐點分類 section 顯示順序（DB migrate 後一律是「手作便當」）
+const CATEGORY_SECTIONS = ['手作便當', '燴飯', '單點', '飲料']
+// 舊資料 backward compat：「便當」歸到「手作便當」section
 const LEGACY_CATEGORY_MAP = {
-  '手作便當': '便當',
+  '便當': '手作便當',
 }
 const normalizeCategory = (c) => LEGACY_CATEGORY_MAP[c] ?? c
 

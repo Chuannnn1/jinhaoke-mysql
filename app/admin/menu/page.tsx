@@ -28,16 +28,16 @@ type FormData = {
 }
 
 // 預設分類（即使 DB 還沒任何 item 也會顯示）
-const DEFAULT_MENU_CATEGORIES = ['便當', '單點', '飲料']
-// 舊資料（migrate 前）會有「手作便當」，UI 上一律歸到「便當」
+const DEFAULT_MENU_CATEGORIES = ['手作便當', '單點', '飲料']
+// 舊資料（後台手動誤加）會有「便當」，UI 上一律歸到「手作便當」
 const LEGACY_CATEGORY_MAP: Record<string, string> = {
-  '手作便當': '便當',
+  '便當': '手作便當',
 }
 const normalizeCategory = (c: string) => LEGACY_CATEGORY_MAP[c] ?? c
 
 const EMPTY_FORM: FormData = {
   name: '',
-  category: '便當',
+  category: '手作便當',
   price: 0,
   emoji: '',
   tag: '',
@@ -96,14 +96,14 @@ export default function MenuPage() {
     items.filter(i => i.is_active === 1).map(i => normalizeCategory(i.category))
   ).size
 
-  // 動態組合 filter chip：預設 + 實際 DB 出現的分類（先 normalize 去掉「手作便當」）
+  // 動態組合 filter chip：預設 + 實際 DB 出現的分類（先 normalize 去掉舊「便當」）
   const dynamicCategorySet = new Set<string>(DEFAULT_MENU_CATEGORIES)
   for (const i of items) {
     if (!i.category) continue
     dynamicCategorySet.add(normalizeCategory(i.category))
   }
   const CATEGORIES = ['全部', ...Array.from(dynamicCategorySet)]
-  // 新增/編輯 form 的下拉選項（不含「全部」，也不含舊「手作便當」）
+  // 新增/編輯 form 的下拉選項（不含「全部」，也不含舊「便當」）
   const MENU_CATEGORIES = Array.from(dynamicCategorySet)
 
   const resetFileState = () => {
@@ -124,7 +124,7 @@ export default function MenuPage() {
     setEditTarget(item)
     setForm({
       name: item.name,
-      // 編輯時把舊「手作便當」正規化為「便當」，存檔時順手 migrate
+      // 編輯時把舊「便當」正規化為「手作便當」，存檔時順手 migrate
       category: normalizeCategory(item.category),
       price: item.price,
       emoji: item.emoji,

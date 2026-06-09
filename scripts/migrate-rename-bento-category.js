@@ -1,5 +1,5 @@
-// Migration: 將 menu_item.category 的「手作便當」全部改成「便當」
-// 用途：對齊使用者後台新增便當時用的 '便當' 分類，避免前/後台 filter 篩不到舊資料。
+// Migration: 將 menu_item.category 的「便當」全部改回「手作便當」
+// 用途：canonical 分類是「手作便當」，「便當」是後台手動誤加的，統一回正。
 //
 // 跑法：先停 dev server，然後 `node scripts/migrate-rename-bento-category.js`
 // Idempotent：第二次跑 changes=0，不會炸。
@@ -18,7 +18,7 @@ if (!fs.existsSync(DB_PATH)) {
 const db = new Database(DB_PATH)
 db.pragma('journal_mode = WAL')
 
-const result = db.prepare("UPDATE menu_item SET category='便當' WHERE category='手作便當'").run()
-console.log(`✓ 重命名 ${result.changes} 筆便當分類`)
+const result = db.prepare("UPDATE menu_item SET category='手作便當' WHERE category='便當'").run()
+console.log(`✓ 重命名 ${result.changes} 筆便當分類（便當 → 手作便當）`)
 
 db.close()
