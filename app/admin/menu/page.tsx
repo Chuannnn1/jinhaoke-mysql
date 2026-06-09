@@ -27,8 +27,13 @@ type FormData = {
   image_url: string
 }
 
-const CATEGORIES = ['全部', '便當', '單點', '飲料']
-const MENU_CATEGORIES = ['便當', '單點', '飲料']
+// 預設分類（即使 DB 還沒任何 item 也會顯示）
+const DEFAULT_MENU_CATEGORIES = ['便當', '單點', '飲料']
+// 舊資料（migrate 前）會有「手作便當」，UI 上一律歸到「便當」
+const LEGACY_CATEGORY_MAP: Record<string, string> = {
+  '手作便當': '便當',
+}
+const normalizeCategory = (c: string) => LEGACY_CATEGORY_MAP[c] ?? c
 
 const EMPTY_FORM: FormData = {
   name: '',
@@ -78,13 +83,28 @@ export default function MenuPage() {
 
   const filtered = items.filter(item => {
     const matchActive = showInactive || item.is_active === 1
-    const matchCat = activeCategory === '全部' || item.category === activeCategory
+    const matchCat =
+      activeCategory === '全部' ||
+      item.category === activeCategory ||
+      normalizeCategory(item.category) === activeCategory
     const matchSearch = search === '' || item.name.includes(search)
     return matchActive && matchCat && matchSearch
   })
 
   const totalItems = items.filter(i => i.is_active === 1).length
-  const categoryCount = new Set(items.filter(i => i.is_active === 1).map(i => i.category)).size
+  const categoryCount = new Set(
+    items.filter(i => i.is_active === 1).map(i => normalizeCategory(i.category))
+  ).size
+
+  // 動態組合 filter chip：預設 + 實際 DB 出現的分類（先 normalize 去掉「手作便當」）
+  const dynamicCategorySet = new Set<string>(DEFAULT_MENU_CATEGORIES)
+  for (const i of items) {
+    if (!i.category) continue
+    dynamicCategorySet.add(normalizeCategory(i.category))
+  }
+  const CATEGORIES = ['全部', ...Array.from(dynamicCategorySet)]
+  // 新增/編輯 form 的下拉選項（不含「全部」，也不含舊「手作便當」）
+  const MENU_CATEGORIES = Array.from(dynamicCategorySet)
 
   const resetFileState = () => {
     setPendingFile(null)
@@ -104,7 +124,8 @@ export default function MenuPage() {
     setEditTarget(item)
     setForm({
       name: item.name,
-      category: item.category,
+      // 編輯時把舊「手作便當」正規化為「便當」，存檔時順手 migrate
+      category: normalizeCategory(item.category),
       price: item.price,
       emoji: item.emoji,
       tag: item.tag,

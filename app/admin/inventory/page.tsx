@@ -44,6 +44,15 @@ function effectiveBlockThreshold(item: InventoryItem): number {
   return item.safety_stock * 0.2
 }
 
+// 數量顯示格式：整數時不顯示小數、小數時顯示 1 位
+// （白米 stock_qty 會出現 83.5999999 這種浮點殘留值，需 toFixed(1)）
+function formatQty(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(Number(n))) return '—'
+  const v = Number(n)
+  if (Number.isInteger(v)) return String(v)
+  return v.toFixed(1)
+}
+
 export default function InventoryPage() {
   const searchParams = useSearchParams()
   const initialTab: TabKey = searchParams?.get('tab') === 'suppliers' ? 'suppliers' : 'inventory'
@@ -100,6 +109,8 @@ function InventoryTab() {
   const [search, setSearch] = useState('')
 
   const [editTarget, setEditTarget] = useState<InventoryItem | null>(null)
+  const [autoGenLoading, setAutoGenLoading] = useState(false)
+  const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
 
   const fetchInventory = useCallback(async () => {
     try {
@@ -148,6 +159,36 @@ function InventoryTab() {
   const totalItems = inventory.length
   const lowStockCount = inventory.filter(i => i.safety_stock > 0 && i.stock_qty <= i.safety_stock).length
   const criticalCount = inventory.filter(i => i.safety_stock > 0 && i.stock_qty <= i.safety_stock * 0.5).length
+
+  const handleAutoGenerate = async () => {
+    if (!window.confirm('將為所有低於安全庫存的食材，按供應商建立採購單。確定繼續？')) return
+    setAutoGenLoading(true)
+    setToast(null)
+    try {
+      const res = await fetch('/api/purchase/auto-generate', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        const created = data.data?.created_count ?? 0
+        const covered = data.data?.covered_ingredients ?? []
+        if (created === 0) {
+          setToast({ type: 'info', text: '目前沒有低於安全庫存的食材，無需建單' })
+        } else {
+          setToast({
+            type: 'success',
+            text: `已建立 ${created} 張採購單，覆蓋 ${covered.length} 項食材，前往 /admin/purchase 查看`,
+          })
+        }
+        fetchInventory()
+      } else {
+        setToast({ type: 'error', text: data.error || '建單失敗' })
+      }
+    } catch {
+      setToast({ type: 'error', text: '網路錯誤' })
+    } finally {
+      setAutoGenLoading(false)
+      setTimeout(() => setToast(null), 6000)
+    }
+  }
 
   const handleSupplierChange = async (item: InventoryItem, supplier_name: string | null) => {
     try {
@@ -222,12 +263,44 @@ function InventoryTab() {
           ))}
         </div>
         <button
+          onClick={handleAutoGenerate}
+          disabled={autoGenLoading}
+          className="ml-auto px-3 py-1.5 bg-clay text-white text-xs rounded-lg hover:bg-clay-deep transition-colors font-medium disabled:opacity-50"
+          title="按供應商建立採購單，補滿至 2 倍安全庫存"
+        >
+          {autoGenLoading ? '建單中…' : '自動補貨建議'}
+        </button>
+        <button
           onClick={fetchInventory}
-          className="ml-auto text-[12px] text-ink/40 hover:text-clay transition-colors font-mono"
+          className="text-[12px] text-ink/40 hover:text-clay transition-colors font-mono"
         >
           重新整理
         </button>
       </div>
+
+      {toast && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-lg text-sm ${
+            toast.type === 'success'
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : toast.type === 'error'
+              ? 'bg-red-50 text-red-700 border border-red-200'
+              : 'bg-blue-50 text-blue-700 border border-blue-200'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span>{toast.text}</span>
+            {toast.type === 'success' && (
+              <a
+                href="/admin/purchase"
+                className="text-xs underline hover:no-underline shrink-0"
+              >
+                前往採購管理 →
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 庫存表格 */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
@@ -258,14 +331,14 @@ function InventoryTab() {
                 >
                   <td className="px-4 py-3 font-medium text-ink">{item.name}</td>
                   <td className="px-4 py-3 text-right font-mono text-ink">
-                    {item.stock_qty} <span className="text-ink/40 text-xs">{item.stock_unit}</span>
+                    {formatQty(item.stock_qty)} <span className="text-ink/40 text-xs">{item.stock_unit}</span>
                   </td>
                   <td className="px-4 py-3 text-right text-ink/40 font-mono">
-                    {item.safety_stock} <span className="text-ink/30 text-xs">{item.stock_unit}</span>
+                    {formatQty(item.safety_stock)} <span className="text-ink/30 text-xs">{item.stock_unit}</span>
                   </td>
                   <td className="px-4 py-3 text-right font-mono">
                     <span className={isOverride ? 'text-clay' : 'text-ink/40'}>
-                      {Number.isInteger(block) ? block : block.toFixed(2)}
+                      {formatQty(block)}
                     </span>
                     <span className="text-ink/30 text-xs"> {item.stock_unit}</span>
                     {isOverride && (
@@ -447,7 +520,7 @@ function InventoryEditModal({
               min="0"
               value={blockOverride}
               onChange={e => setBlockOverride(e.target.value)}
-              placeholder={`預設：${Number.isInteger(fallback) ? fallback : fallback.toFixed(2)}（安全存量 × 0.2）`}
+              placeholder={`預設：${formatQty(fallback)}（安全存量 × 0.2）`}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
             />
             <p className="text-[11px] text-ink/30 mt-1">

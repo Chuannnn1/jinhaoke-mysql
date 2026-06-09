@@ -37,15 +37,15 @@ const INGREDIENTS = [
 // menu_item: { name, category, price, emoji, tag, sub, option, description }
 // item_id 由 AUTOINCREMENT 自動產生，recipe 透過 name → item_id 對應
 const MENU_ITEMS = [
-  // 手作便當
-  { name: '大比目魚排便當',  category: '手作便當', price: 130, emoji: '🐟', tag: '魚',   sub: '扁鱈',         option: '',                description: '扁鱈魚排配三樣配菜' },
-  { name: '酥炸豬排便當',    category: '手作便當', price: 130, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '酥炸厚切豬排配三樣配菜' },
-  { name: '酥嫩雞腿便當',    category: '手作便當', price: 130, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '酥嫩雞腿配三樣配菜' },
-  { name: '紅麴豬五花便當',  category: '手作便當', price: 120, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '紅麴豬五花配三樣配菜' },
-  { name: '酥炸排骨便當',    category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '無骨',         option: '',                description: '無骨酥炸排骨配三樣配菜' },
-  { name: '滷豬腳便當',      category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '滷豬腳配三樣配菜' },
-  { name: '滷雞腿便當',      category: '手作便當', price: 100, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '滷雞腿配三樣配菜' },
-  { name: '滷排骨便當',      category: '手作便當', price: 100, emoji: '🥚', tag: '豬',   sub: '帶骨·附滷蛋',  option: '',                description: '帶骨滷排骨附滷蛋配三樣配菜' },
+  // 便當
+  { name: '大比目魚排便當',  category: '便當', price: 130, emoji: '🐟', tag: '魚',   sub: '扁鱈',         option: '',                description: '扁鱈魚排配三樣配菜' },
+  { name: '酥炸豬排便當',    category: '便當', price: 130, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '酥炸厚切豬排配三樣配菜' },
+  { name: '酥嫩雞腿便當',    category: '便當', price: 130, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '酥嫩雞腿配三樣配菜' },
+  { name: '紅麴豬五花便當',  category: '便當', price: 120, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '紅麴豬五花配三樣配菜' },
+  { name: '酥炸排骨便當',    category: '便當', price: 100, emoji: '🐷', tag: '豬',   sub: '無骨',         option: '',                description: '無骨酥炸排骨配三樣配菜' },
+  { name: '滷豬腳便當',      category: '便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '滷豬腳配三樣配菜' },
+  { name: '滷雞腿便當',      category: '便當', price: 100, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '滷雞腿配三樣配菜' },
+  { name: '滷排骨便當',      category: '便當', price: 100, emoji: '🥚', tag: '豬',   sub: '帶骨·附滷蛋',  option: '',                description: '帶骨滷排骨附滷蛋配三樣配菜' },
 
   // 燴飯
   { name: '沙茶牛肉燴飯',    category: '燴飯',     price: 110, emoji: '🥩', tag: '牛',   sub: '',             option: '加肉60 / 加菜10', description: '沙茶牛肉' },
@@ -72,7 +72,7 @@ const MENU_ITEMS = [
 // recipe: [menu_name, ingredient_name, consume_qty]
 //   menu_name 用來查 item_id（避開 AUTOINCREMENT 順序問題）
 const RECIPES = [
-  // 手作便當
+  // 便當
   ['大比目魚排便當',  '魚排',     1],
   ['大比目魚排便當',  '白米',     0.3],
   ['酥炸豬排便當',    '豬排',     1],

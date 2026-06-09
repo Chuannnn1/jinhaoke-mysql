@@ -136,18 +136,33 @@ export async function POST(request: Request) {
 
     const db = getDb()
 
-    // 產生訂單編號：A202606030001
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
-    const randomDigits = String(Math.floor(Math.random() * 10000)).padStart(4, '0')
-    const orderId = `A${today}${randomDigits}`
-
-    // 電話處理：內用沒電話 → 產暫時電話
-    const phone = customer_phone?.trim() || `09${orderId.slice(-8)}`
+    // 產生訂單編號：A + YYYYMMDD + 4 碼當日流水（從 DB max 推算 + 1）
+    // 注意：order_date 必須是 YYYY-MM-DD（reports 用 dashed 格式查詢）；
+    //       order_id 用 compact 格式保留流水號可讀性。
+    const isoDate = new Date().toISOString().slice(0, 10) // '2026-06-09'
+    const compact = isoDate.replace(/-/g, '')              // '20260609'
+    const prefix = `A${compact}`
 
     const getMenuPrice = db.prepare('SELECT price FROM menu_item WHERE item_id = ?')
 
+    // 為避免外層作用域沒辦法取回 orderId，宣告 let 讓 transaction 內 assign
+    let orderId = ''
+    let phone = ''
+
     // Transaction：全部成功或全部失敗
+    // 流水號在 transaction 內查 max，better-sqlite3 single-thread + 同步 API
+    // 確保查詢→INSERT 之間不會被其它連線插入新單，避免 race。
     db.transaction(() => {
+      // 0. 在 transaction 內查當日最大 order_id，推算下一個流水號
+      const last = db.prepare(
+        `SELECT order_id FROM "order" WHERE order_id LIKE ? ORDER BY order_id DESC LIMIT 1`
+      ).get(`${prefix}%`) as { order_id: string } | undefined
+      const nextSeq = last ? parseInt(last.order_id.slice(-4), 10) + 1 : 1
+      orderId = `${prefix}${String(nextSeq).padStart(4, '0')}`
+
+      // 電話處理：內用沒電話 → 產暫時電話
+      phone = customer_phone?.trim() || `09${orderId.slice(-8)}`
+
       // 1. upsert delivery_customer（避免 FK constraint fail）
       db.prepare(`
         INSERT INTO delivery_customer (phone, name, address) VALUES (?, ?, '')
@@ -158,7 +173,7 @@ export async function POST(request: Request) {
       db.prepare(`
         INSERT INTO "order" (order_id, order_date, status, customer_phone)
         VALUES (?, ?, '待製作', ?)
-      `).run(orderId, today, phone)
+      `).run(orderId, isoDate, phone)
 
       // 3. 寫入訂單明細（用下單時的單價快照）
       //    - 防呆：item_id 缺漏 / 查不到 menu_item → throw，整個 transaction rollback

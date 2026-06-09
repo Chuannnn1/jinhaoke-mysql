@@ -2,18 +2,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface ImportValidItem {
-  item_name: string
+  code: number
   qty: number
-  unit_price: number
+  spice: string
+  item_name?: string
+  unit_price?: number
+  item_id?: number
 }
 
 interface ImportValidOrder {
   order_id: string
+  status: string
   items: ImportValidItem[]
   total: number
+  amount_csv: number
   phone: string
-  time: string
-  notes: string
+  note: string
 }
 
 interface ImportRowError {
@@ -21,12 +25,26 @@ interface ImportRowError {
   reason: string
 }
 
+interface ImportMenuOption {
+  item_id: number
+  name: string
+  price: number
+}
+
 interface ImportPreviewResponse {
   success: boolean
   preview?: boolean
-  summary?: { orders: number; items: number; errors: number }
+  summary?: {
+    orders: number
+    items: number
+    errors: number
+    file?: string
+    order_date?: string
+  }
   valid?: ImportValidOrder[]
   errors?: ImportRowError[]
+  unmapped_codes?: number[]
+  menu_options?: ImportMenuOption[]
   imported?: number
   error?: string
 }
@@ -65,6 +83,10 @@ export default function AdminOrderPage() {
   const [importError, setImportError] = useState<string | null>(null)
   const [importLoading, setImportLoading] = useState(false)
   const [importedCount, setImportedCount] = useState(0)
+  // code -> item_id mapping（UI 下拉填入）
+  const [importMapping, setImportMapping] = useState<Record<string, number>>({})
+  // 哪個 order 是展開狀態
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set())
   const importFileRef = useRef<HTMLInputElement | null>(null)
   const importedFileRef = useRef<File | null>(null)
 
@@ -158,8 +180,23 @@ export default function AdminOrderPage() {
     setImportError(null)
     setImportLoading(false)
     setImportedCount(0)
+    setImportMapping({})
+    setExpandedOrderIds(new Set())
     importedFileRef.current = null
     if (importFileRef.current) importFileRef.current.value = ''
+  }
+
+  const toggleOrderExpand = (orderId: string) => {
+    setExpandedOrderIds(prev => {
+      const next = new Set(prev)
+      if (next.has(orderId)) next.delete(orderId)
+      else next.add(orderId)
+      return next
+    })
+  }
+
+  const handleMappingChange = (code: number, itemId: number) => {
+    setImportMapping(prev => ({ ...prev, [String(code)]: itemId }))
   }
 
   const openImport = () => {
@@ -207,6 +244,7 @@ export default function AdminOrderPage() {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('confirm', '1')
+      fd.append('mapping', JSON.stringify(importMapping))
       const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
       const data: ImportPreviewResponse = await res.json()
       if (!data.success) {
@@ -224,6 +262,20 @@ export default function AdminOrderPage() {
     } finally {
       setImportLoading(false)
     }
+  }
+
+  // 計算還有哪些 code 沒被 mapping
+  const computeUnmappedCodes = (): number[] => {
+    if (!importPreview) return []
+    const allCodes = new Set<number>()
+    for (const o of importPreview.valid ?? []) {
+      for (const it of o.items) allCodes.add(it.code)
+    }
+    const unmapped: number[] = []
+    for (const code of Array.from(allCodes).sort((a, b) => a - b)) {
+      if (!importMapping[String(code)]) unmapped.push(code)
+    }
+    return unmapped
   }
 
   return (
@@ -347,11 +399,20 @@ export default function AdminOrderPage() {
               {importPhase === 'idle' && (
                 <div className="space-y-4">
                   <p className="text-[13px] text-ink/70 leading-relaxed">
-                    請上傳 CSV 檔案，欄位順序為：
+                    請上傳當日訂單 CSV，檔名為
                     <code className="font-mono text-[12px] bg-gray-100 px-1.5 py-0.5 rounded mx-1">
-                      order_id,item_name,qty,note,phone,time
+                      MMDD.csv
+                    </code>
+                    （如 0519.csv 對應 2026-05-19）。欄位順序：
+                    <code className="font-mono text-[12px] bg-gray-100 px-1.5 py-0.5 rounded mx-1">
+                      編號,金額,電話,付款狀態,品項,辣度
                     </code>
                   </p>
+                  <ul className="text-[12px] text-ink/50 list-disc pl-5 space-y-0.5">
+                    <li>品項以分號分隔 code，可加 *N 表數量（例：5;7*3）</li>
+                    <li>付款狀態 0 = 待付款；1 = 已完成</li>
+                    <li>電話接受 3~15 碼或 null</li>
+                  </ul>
                   <div className="flex items-center gap-3">
                     <input
                       ref={importFileRef}
@@ -378,107 +439,212 @@ export default function AdminOrderPage() {
                 </div>
               )}
 
-              {importPhase === 'previewing' && importPreview && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-gray-50 rounded-lg p-3 border border-border">
-                      <p className="text-[11px] text-ink/40">訂單數</p>
-                      <p className="font-mono text-lg text-ink font-semibold">
-                        {importPreview.summary?.orders ?? 0}
-                      </p>
-                    </div>
-                    <div className="bg-gray-50 rounded-lg p-3 border border-border">
-                      <p className="text-[11px] text-ink/40">項目數</p>
-                      <p className="font-mono text-lg text-ink font-semibold">
-                        {importPreview.summary?.items ?? 0}
-                      </p>
-                    </div>
-                    <div className={`rounded-lg p-3 border ${
-                      (importPreview.summary?.errors ?? 0) > 0
-                        ? 'bg-red-50 border-red-200'
-                        : 'bg-gray-50 border-border'
-                    }`}>
-                      <p className="text-[11px] text-ink/40">錯誤</p>
-                      <p className={`font-mono text-lg font-semibold ${
-                        (importPreview.summary?.errors ?? 0) > 0 ? 'text-red-500' : 'text-ink'
-                      }`}>
-                        {importPreview.summary?.errors ?? 0}
-                      </p>
-                    </div>
-                  </div>
-
-                  {importPreview.errors && importPreview.errors.length > 0 && (
-                    <div>
-                      <p className="text-[12px] text-ink/60 font-semibold mb-2">錯誤列表</p>
-                      <div className="border border-red-200 rounded-lg overflow-hidden">
-                        <table className="w-full text-[12px]">
-                          <thead className="bg-red-50 text-ink/70">
-                            <tr>
-                              <th className="px-3 py-2 text-left w-16">列號</th>
-                              <th className="px-3 py-2 text-left">原因</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {importPreview.errors.map((e, i) => (
-                              <tr key={i} className="border-t border-red-100">
-                                <td className="px-3 py-2 font-mono">{e.row}</td>
-                                <td className="px-3 py-2 text-red-600">{e.reason}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {importPreview.valid && importPreview.valid.length > 0 && (
-                    <div>
-                      <p className="text-[12px] text-ink/60 font-semibold mb-2">可匯入訂單</p>
-                      <div className="border border-border rounded-lg overflow-hidden">
-                        <table className="w-full text-[12px]">
-                          <thead className="bg-gray-50 text-ink/70">
-                            <tr>
-                              <th className="px-3 py-2 text-left">訂單編號</th>
-                              <th className="px-3 py-2 text-left">項目</th>
-                              <th className="px-3 py-2 text-right w-20">總額</th>
-                              <th className="px-3 py-2 text-left w-28">電話</th>
-                              <th className="px-3 py-2 text-left">備註</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {importPreview.valid.map(o => (
-                              <tr key={o.order_id} className="border-t border-border">
-                                <td className="px-3 py-2 font-mono">{o.order_id}</td>
-                                <td className="px-3 py-2 text-ink/70">
-                                  {o.items.map(it => `${it.item_name}×${it.qty}`).join('、')}
-                                </td>
-                                <td className="px-3 py-2 text-right font-mono text-clay font-semibold">
-                                  NT$ {o.total}
-                                </td>
-                                <td className="px-3 py-2 font-mono text-ink/60">
-                                  {o.phone || '—'}
-                                </td>
-                                <td className="px-3 py-2 text-ink/40 italic">
-                                  {o.notes || '—'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      {importPreview.valid.some(o => o.notes) && (
-                        <p className="text-[11px] text-ink/40 mt-2">
-                          備註欄位目前僅供預覽，不會寫入資料庫。
+              {importPhase === 'previewing' && importPreview && (() => {
+                const unmappedCodes = computeUnmappedCodes()
+                const menuOptions = importPreview.menu_options ?? []
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="bg-gray-50 rounded-lg p-3 border border-border">
+                        <p className="text-[11px] text-ink/40">檔案 / 日期</p>
+                        <p className="font-mono text-[13px] text-ink font-semibold truncate">
+                          {importPreview.summary?.file ?? '—'}
                         </p>
-                      )}
+                        <p className="font-mono text-[11px] text-ink/50">
+                          {importPreview.summary?.order_date ?? '—'}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-border">
+                        <p className="text-[11px] text-ink/40">訂單數</p>
+                        <p className="font-mono text-lg text-ink font-semibold">
+                          {importPreview.summary?.orders ?? 0}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3 border border-border">
+                        <p className="text-[11px] text-ink/40">項目數</p>
+                        <p className="font-mono text-lg text-ink font-semibold">
+                          {importPreview.summary?.items ?? 0}
+                        </p>
+                      </div>
+                      <div className={`rounded-lg p-3 border ${
+                        (importPreview.summary?.errors ?? 0) > 0
+                          ? 'bg-red-50 border-red-200'
+                          : 'bg-gray-50 border-border'
+                      }`}>
+                        <p className="text-[11px] text-ink/40">錯誤</p>
+                        <p className={`font-mono text-lg font-semibold ${
+                          (importPreview.summary?.errors ?? 0) > 0 ? 'text-red-500' : 'text-ink'
+                        }`}>
+                          {importPreview.summary?.errors ?? 0}
+                        </p>
+                      </div>
                     </div>
-                  )}
 
-                  {importError && (
-                    <p className="text-[12px] text-red-500">{importError}</p>
-                  )}
-                </div>
-              )}
+                    {unmappedCodes.length > 0 && (
+                      <div>
+                        <p className="text-[12px] text-ink/60 font-semibold mb-2">
+                          品項對應（剩餘 {unmappedCodes.length} 個 code 待選）
+                        </p>
+                        <div className="border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
+                          {unmappedCodes.map(code => (
+                            <div key={code} className="flex items-center gap-3">
+                              <span className="font-mono text-[12px] w-16 shrink-0 text-ink">
+                                code {code}
+                              </span>
+                              <span className="text-[12px] text-ink/40">→</span>
+                              <select
+                                value={importMapping[String(code)] ?? ''}
+                                onChange={e => handleMappingChange(code, parseInt(e.target.value, 10))}
+                                className="flex-1 text-[12px] border border-border rounded px-2 py-1 bg-white"
+                              >
+                                <option value="">— 請選擇對應餐點 —</option>
+                                {menuOptions.map(m => (
+                                  <option key={m.item_id} value={m.item_id}>
+                                    [{m.item_id}] {m.name} (NT$ {m.price})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-ink/40 mt-2">
+                          全部選完後「確認匯入」按鈕才會啟用。
+                        </p>
+                      </div>
+                    )}
+
+                    {importPreview.errors && importPreview.errors.length > 0 && (
+                      <div>
+                        <p className="text-[12px] text-ink/60 font-semibold mb-2">錯誤列表</p>
+                        <div className="border border-red-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
+                          <table className="w-full text-[12px]">
+                            <thead className="bg-red-50 text-ink/70 sticky top-0">
+                              <tr>
+                                <th className="px-3 py-2 text-left w-16">列號</th>
+                                <th className="px-3 py-2 text-left">原因</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importPreview.errors.map((e, i) => (
+                                <tr key={i} className="border-t border-red-100">
+                                  <td className="px-3 py-2 font-mono">{e.row}</td>
+                                  <td className="px-3 py-2 text-red-600">{e.reason}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {importPreview.valid && importPreview.valid.length > 0 && (
+                      <div>
+                        <p className="text-[12px] text-ink/60 font-semibold mb-2">可匯入訂單</p>
+                        <div className="border border-border rounded-lg overflow-hidden">
+                          <table className="w-full text-[12px]">
+                            <thead className="bg-gray-50 text-ink/70">
+                              <tr>
+                                <th className="px-3 py-2 text-left w-32">訂單編號</th>
+                                <th className="px-3 py-2 text-left w-20">狀態</th>
+                                <th className="px-3 py-2 text-left">摘要</th>
+                                <th className="px-3 py-2 text-right w-24">計算總額</th>
+                                <th className="px-3 py-2 text-right w-20">CSV金額</th>
+                                <th className="px-3 py-2 text-left w-28">電話</th>
+                                <th className="px-3 py-2 text-center w-12"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {importPreview.valid.map(o => {
+                                const expanded = expandedOrderIds.has(o.order_id)
+                                return (
+                                  <>
+                                    <tr key={o.order_id} className="border-t border-border">
+                                      <td className="px-3 py-2 font-mono">{o.order_id}</td>
+                                      <td className="px-3 py-2">
+                                        <span className={`px-1.5 py-0.5 rounded text-[11px] ${
+                                          o.status === '已完成'
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-orange-100 text-orange-700'
+                                        }`}>{o.status}</span>
+                                      </td>
+                                      <td className="px-3 py-2 text-ink/70">
+                                        {o.items.map(it =>
+                                          `${it.item_name ?? `?code${it.code}`}×${it.qty}`
+                                        ).join('、')}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-mono text-clay font-semibold">
+                                        NT$ {o.total}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-mono text-ink/40">
+                                        {o.amount_csv}
+                                      </td>
+                                      <td className="px-3 py-2 font-mono text-ink/60">
+                                        {o.phone || '—'}
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleOrderExpand(o.order_id)}
+                                          className="text-ink/40 hover:text-ink text-[11px]"
+                                          aria-label="展開明細"
+                                        >
+                                          {expanded ? '▲' : '▼'}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                    {expanded && (
+                                      <tr key={`${o.order_id}-detail`} className="border-t border-border bg-gray-50/60">
+                                        <td colSpan={7} className="px-6 py-2">
+                                          <table className="w-full text-[11px]">
+                                            <thead className="text-ink/40">
+                                              <tr>
+                                                <th className="text-left py-1 w-16">code</th>
+                                                <th className="text-left py-1">品名</th>
+                                                <th className="text-right py-1 w-12">qty</th>
+                                                <th className="text-right py-1 w-20">單價</th>
+                                                <th className="text-left py-1 w-20">辣度</th>
+                                              </tr>
+                                            </thead>
+                                            <tbody>
+                                              {o.items.map((it, idx) => (
+                                                <tr key={idx} className="border-t border-border/40">
+                                                  <td className="py-1 font-mono">{it.code}</td>
+                                                  <td className="py-1 text-ink/70">
+                                                    {it.item_name ?? <span className="text-amber-600">（未對應）</span>}
+                                                  </td>
+                                                  <td className="py-1 text-right font-mono">{it.qty}</td>
+                                                  <td className="py-1 text-right font-mono text-ink/50">
+                                                    {it.unit_price !== undefined ? `NT$ ${it.unit_price}` : '—'}
+                                                  </td>
+                                                  <td className="py-1 text-ink/50">{it.spice || '—'}</td>
+                                                </tr>
+                                              ))}
+                                            </tbody>
+                                          </table>
+                                          {o.note && (
+                                            <p className="text-[11px] text-ink/40 italic mt-1">備註：{o.note}</p>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    )}
+                                  </>
+                                )
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <p className="text-[11px] text-ink/40 mt-2">
+                          辣度資訊僅供預覽，不會寫入資料庫（schema 無 note 欄位）。
+                        </p>
+                      </div>
+                    )}
+
+                    {importError && (
+                      <p className="text-[12px] text-red-500">{importError}</p>
+                    )}
+                  </div>
+                )
+              })()}
 
               {importPhase === 'done' && (
                 <div className="py-10 text-center">
@@ -499,7 +665,7 @@ export default function AdminOrderPage() {
                     disabled={importLoading}
                     className="text-[12px] px-3 py-1.5 rounded-md border border-border text-ink hover:bg-gray-50"
                   >
-                    重新選擇
+                    丟棄
                   </button>
                   <button
                     type="button"
@@ -507,7 +673,8 @@ export default function AdminOrderPage() {
                     disabled={
                       importLoading ||
                       (importPreview?.errors?.length ?? 0) > 0 ||
-                      (importPreview?.valid?.length ?? 0) === 0
+                      (importPreview?.valid?.length ?? 0) === 0 ||
+                      computeUnmappedCodes().length > 0
                     }
                     className="text-[12px] px-3 py-1.5 rounded-md bg-clay text-white hover:bg-clay-deep disabled:opacity-40 disabled:cursor-not-allowed"
                   >
