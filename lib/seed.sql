@@ -29,9 +29,9 @@ INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, q
 INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name) VALUES
   ('炸排骨',     8,  10, '份', '包', 15, '大成肉品');
 INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name) VALUES
-  ('鱸雞腿',     22, 10, '隻', '包', 10, '肉品大王');
+  ('酥嫩雞腿',   22, 10, '隻', '包', 10, '肉品大王');
 INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name) VALUES
-  ('蘇嫩雞腿',   15, 10, '隻', '包', 15, '大成肉品');
+  ('滷雞腿',     15, 10, '隻', '包', 15, '大成肉品');
 INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name) VALUES
   ('牛肉',       60, 30, 'kg', '包', 2,  '肉品大王');
 INSERT INTO ingredient (name, stock_qty, safety_stock, stock_unit, order_unit, qty_per_order_unit, supplier_name) VALUES
@@ -108,7 +108,7 @@ INSERT INTO recipe VALUES (1, '魚排',  1);
 INSERT INTO recipe VALUES (1, '白米',  0.3);
 INSERT INTO recipe VALUES (2, '豬排',  1);
 INSERT INTO recipe VALUES (2, '白米',  0.3);
-INSERT INTO recipe VALUES (3, '鱸雞腿', 1);
+INSERT INTO recipe VALUES (3, '酥嫩雞腿', 1);
 INSERT INTO recipe VALUES (3, '白米',  0.3);
 INSERT INTO recipe VALUES (4, '紅麴豬', 1);
 INSERT INTO recipe VALUES (4, '白米',  0.3);
@@ -116,7 +116,7 @@ INSERT INTO recipe VALUES (5, '炸排骨', 1);
 INSERT INTO recipe VALUES (5, '白米',  0.3);
 INSERT INTO recipe VALUES (6, '帶骨排骨', 1);
 INSERT INTO recipe VALUES (6, '白米',  0.3);
-INSERT INTO recipe VALUES (7, '蘇嫩雞腿', 1);
+INSERT INTO recipe VALUES (7, '滷雞腿', 1);
 INSERT INTO recipe VALUES (7, '白米',  0.3);
 INSERT INTO recipe VALUES (8, '帶骨排骨', 1);
 INSERT INTO recipe VALUES (8, '白米',  0.3);
@@ -130,14 +130,16 @@ INSERT INTO recipe VALUES (11, '豬肉',  0.2);
 INSERT INTO recipe VALUES (11, '白米',  0.3);
 
 -- 單點（item_id 12-25）— 只放食材對應明確的
--- 略過：14 酥嫩雞腿 / 20 滷雞腿（雞腿 SKU 待釐清）/ 21 季節炒時蔬（高麗菜暫不追蹤）
+-- 略過：21 季節炒時蔬（高麗菜暫不追蹤）
 INSERT INTO recipe VALUES (12, '魚排',    1);     -- 大比目魚排（單點不附飯）
 INSERT INTO recipe VALUES (13, '豬排',    1);     -- 酥炸豬排
+INSERT INTO recipe VALUES (14, '酥嫩雞腿', 1);    -- 酥嫩雞腿
 INSERT INTO recipe VALUES (15, '紅麴豬',  1);     -- 紅麴豬五花
 INSERT INTO recipe VALUES (16, '牛肉',    0.2);   -- 沙茶燴牛肉
 INSERT INTO recipe VALUES (17, '帶骨排骨', 1);    -- 滷排骨（二片）
 INSERT INTO recipe VALUES (18, '豬肉',    0.2);   -- 沙茶燴豬肉
 INSERT INTO recipe VALUES (19, '炸排骨',  1);     -- 酥炸排骨（無骨）
+INSERT INTO recipe VALUES (20, '滷雞腿',  1);     -- 滷雞腿
 INSERT INTO recipe VALUES (22, '白米',   0.3);    -- 白飯
 
 -- ============================================================

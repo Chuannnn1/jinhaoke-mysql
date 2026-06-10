@@ -8,7 +8,8 @@ const dbPath = path.join(__dirname, '..', 'data', 'jinhaoke.db')
 const db = new Database(dbPath)
 
 // (menu_item.name, ingredient_name, consume_qty)
-// 略過：酥嫩雞腿 / 滷雞腿（雞腿 SKU 待釐清）/ 季節炒時蔬（高麗菜暫不追蹤）
+// 略過：季節炒時蔬（高麗菜暫不追蹤）
+// 14 酥嫩雞腿 / 20 滷雞腿在 migrate-fix-chicken-leg-skus.js 處理（先改完食材名稱才能 reference）
 const RECIPES = [
   ['大比目魚排',   '魚排',    1],
   ['酥炸豬排',     '豬排',    1],
