@@ -178,6 +178,19 @@ export async function POST(req: Request) {
           VALUES (?, ?, ?, ?)
         `).run(newPoId, name, v.order_qty, v.total_cost)
       }
+
+      // 邊界：若新建時直接 status='已驗貨'，需同步補庫存
+      if (status === '已驗貨') {
+        const addStock = db.prepare(
+          'UPDATE ingredient SET stock_qty = stock_qty + ? WHERE name = ?'
+        )
+        for (const [name, v] of merged) {
+          const r = addStock.run(v.order_qty, name)
+          if (r.changes === 0) {
+            console.warn(`[purchase 已驗貨] 找不到食材 "${name}"，跳過入庫`)
+          }
+        }
+      }
     })()
 
     const newOrder = db

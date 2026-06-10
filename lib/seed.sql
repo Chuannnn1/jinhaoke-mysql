@@ -129,6 +129,17 @@ INSERT INTO recipe VALUES (10, '白米',  0.3);
 INSERT INTO recipe VALUES (11, '豬肉',  0.2);
 INSERT INTO recipe VALUES (11, '白米',  0.3);
 
+-- 單點（item_id 12-25）— 只放食材對應明確的
+-- 略過：14 酥嫩雞腿 / 20 滷雞腿（雞腿 SKU 待釐清）/ 21 季節炒時蔬（高麗菜暫不追蹤）
+INSERT INTO recipe VALUES (12, '魚排',    1);     -- 大比目魚排（單點不附飯）
+INSERT INTO recipe VALUES (13, '豬排',    1);     -- 酥炸豬排
+INSERT INTO recipe VALUES (15, '紅麴豬',  1);     -- 紅麴豬五花
+INSERT INTO recipe VALUES (16, '牛肉',    0.2);   -- 沙茶燴牛肉
+INSERT INTO recipe VALUES (17, '帶骨排骨', 1);    -- 滷排骨（二片）
+INSERT INTO recipe VALUES (18, '豬肉',    0.2);   -- 沙茶燴豬肉
+INSERT INTO recipe VALUES (19, '炸排骨',  1);     -- 酥炸排骨（無骨）
+INSERT INTO recipe VALUES (22, '白米',   0.3);    -- 白飯
+
 -- ============================================================
 -- 外送顧客（delivery_customer）
 -- ============================================================

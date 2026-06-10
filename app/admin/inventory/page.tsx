@@ -68,7 +68,7 @@ export default function InventoryPage() {
 
       <main className="flex-1 overflow-auto p-6 bg-gray-50">
         {/* 子分頁 */}
-        <div className="flex gap-2 mb-5">
+        <div className="flex gap-2 mb-5 cursor-default">
           <button
             onClick={() => setTab('inventory')}
             className={`px-4 py-1.5 rounded-full text-sm transition-colors ${

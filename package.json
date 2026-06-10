@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3100",
     "db:init": "node scripts/init-db.js",
-    "db:migrate": "node scripts/migrate-order-status-constraint.js && node scripts/migrate-add-menu-image.js && node scripts/migrate-add-block-threshold.js && node scripts/migrate-rename-bento-category.js",
+    "db:migrate": "node scripts/migrate-order-status-constraint.js && node scripts/migrate-add-menu-image.js && node scripts/migrate-add-block-threshold.js && node scripts/migrate-rename-bento-category.js && node scripts/migrate-add-single-item-recipes.js",
     "db:seed": "node scripts/seed-only.js"
   },
   "dependencies": {

@@ -153,6 +153,14 @@ export async function PATCH(
       }
     }
 
+    // 抓舊狀態，判斷是否「進入已驗貨」(用來補庫存)
+    const prevRow = db
+      .prepare('SELECT status FROM purchase_order WHERE po_id = ?')
+      .get(poId) as { status: string }
+    const prevStatus = prevRow.status
+    const enteringReceived =
+      body.status === '已驗貨' && prevStatus !== '已驗貨'
+
     db.transaction(() => {
       if (body.status !== undefined) {
         db.prepare('UPDATE purchase_order SET status = ? WHERE po_id = ?')
@@ -185,6 +193,27 @@ export async function PATCH(
           .get(poId) as { s: number }
         db.prepare('UPDATE purchase_order SET total_amount = ? WHERE po_id = ?')
           .run(sum.s, poId)
+      }
+
+      // 「進入已驗貨」→ 把這張 PO 全部明細 order_qty 加回 ingredient.stock_qty
+      // 為避免重複入帳，只在 prevStatus !== '已驗貨' && 新狀態 === '已驗貨' 時觸發
+      if (enteringReceived) {
+        const items = db
+          .prepare(
+            'SELECT ingredient_name, order_qty FROM purchase_order_item WHERE po_id = ?'
+          )
+          .all(poId) as Array<{ ingredient_name: string; order_qty: number }>
+        const addStock = db.prepare(
+          'UPDATE ingredient SET stock_qty = stock_qty + ? WHERE name = ?'
+        )
+        for (const it of items) {
+          const r = addStock.run(it.order_qty, it.ingredient_name)
+          if (r.changes === 0) {
+            console.warn(
+              `[purchase 已驗貨] 找不到食材 "${it.ingredient_name}"，跳過入庫`
+            )
+          }
+        }
       }
     })()
 

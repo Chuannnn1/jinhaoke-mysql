@@ -46,6 +46,8 @@ interface ImportPreviewResponse {
   unmapped_codes?: number[]
   menu_options?: ImportMenuOption[]
   imported?: number
+  total_csv_orders?: number
+  skipped_unmapped_codes?: number[]
   error?: string
 }
 
@@ -83,6 +85,7 @@ export default function AdminOrderPage() {
   const [importError, setImportError] = useState<string | null>(null)
   const [importLoading, setImportLoading] = useState(false)
   const [importedCount, setImportedCount] = useState(0)
+  const [importedSkippedCodes, setImportedSkippedCodes] = useState<number[] | undefined>(undefined)
   // code -> item_id mapping（UI 下拉填入）
   const [importMapping, setImportMapping] = useState<Record<string, number>>({})
   // 哪個 order 是展開狀態
@@ -175,16 +178,17 @@ export default function AdminOrderPage() {
   // 匯入訂單流程
   // ============================================================
   const resetImport = () => {
-    setImportPhase('idle')
-    setImportPreview(null)
-    setImportError(null)
-    setImportLoading(false)
-    setImportedCount(0)
-    setImportMapping({})
-    setExpandedOrderIds(new Set())
-    importedFileRef.current = null
-    if (importFileRef.current) importFileRef.current.value = ''
-  }
+      setImportPhase('idle')
+      setImportPreview(null)
+      setImportError(null)
+      setImportLoading(false)
+      setImportedCount(0)
+      setImportedSkippedCodes(undefined)
+      setImportMapping({})
+      setExpandedOrderIds(new Set())
+      importedFileRef.current = null
+      if (importFileRef.current) importFileRef.current.value = ''
+    }
 
   const toggleOrderExpand = (orderId: string) => {
     setExpandedOrderIds(prev => {
@@ -248,15 +252,16 @@ export default function AdminOrderPage() {
       const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
       const data: ImportPreviewResponse = await res.json()
       if (!data.success) {
-        setImportError(data.error || '匯入失敗')
-      } else {
-        setImportedCount(data.imported ?? 0)
-        setImportPhase('done')
-        fetchOrders()
-        setTimeout(() => {
-          closeImport()
-        }, 2000)
-      }
+              setImportError(data.error || '匯入失敗')
+            } else {
+              setImportedCount(data.imported ?? 0)
+              setImportedSkippedCodes(data.skipped_unmapped_codes)
+              setImportPhase('done')
+              fetchOrders()
+              setTimeout(() => {
+                closeImport()
+              }, 2000)
+            }
     } catch {
       setImportError('網路錯誤')
     } finally {
@@ -322,10 +327,10 @@ export default function AdminOrderPage() {
                     }`}
                   >
                     {/* Column header */}
-                    <div className="flex items-center justify-between px-4 py-3 shrink-0">
-                      <span className={`text-sm font-semibold font-body ${col.key === '已完成' ? 'text-green-600' : 'text-ink'}`}>
-                        {col.label}
-                      </span>
+                                        <div className="flex items-center justify-between px-4 py-3 shrink-0 cursor-default">
+                                          <span className={`text-sm font-semibold font-body ${col.key === '已完成' ? 'text-green-600' : 'text-ink'}`}>
+                                            {col.label}
+                                          </span>
                       <span className={`w-6 h-6 rounded-full ${col.badge} text-[11px] font-bold flex items-center justify-center`}>
                         {colOrders.length}
                       </span>
@@ -482,9 +487,9 @@ export default function AdminOrderPage() {
 
                     {unmappedCodes.length > 0 && (
                       <div>
-                        <p className="text-[12px] text-ink/60 font-semibold mb-2">
-                          品項對應（剩餘 {unmappedCodes.length} 個 code 待選）
-                        </p>
+                                              <p className="text-[12px] text-ink/60 font-semibold mb-2">
+                                                品項對應（剩餘 {unmappedCodes.length} 個 code 待選 — 未對應的品項將被跳過，不會匯入）
+                                              </p>
                         <div className="border border-amber-200 bg-amber-50/40 rounded-lg p-3 space-y-2">
                           {unmappedCodes.map(code => (
                             <div key={code} className="flex items-center gap-3">
@@ -508,7 +513,7 @@ export default function AdminOrderPage() {
                           ))}
                         </div>
                         <p className="text-[11px] text-ink/40 mt-2">
-                          全部選完後「確認匯入」按鈕才會啟用。
+                          {`全部選完後可精準對應品項；未選的 code 匯入時將自動跳過。`}
                         </p>
                       </div>
                     )}
@@ -647,13 +652,18 @@ export default function AdminOrderPage() {
               })()}
 
               {importPhase === 'done' && (
-                <div className="py-10 text-center">
-                  <p className="text-ink font-semibold text-base">
-                    已匯入 {importedCount} 筆訂單
-                  </p>
-                  <p className="text-[12px] text-ink/40 mt-2">視窗即將關閉…</p>
-                </div>
-              )}
+                              <div className="py-10 text-center">
+                                <p className="text-ink font-semibold text-base">
+                                  已匯入 {importedCount} 筆訂單
+                                </p>
+                                {importedSkippedCodes && importedSkippedCodes.length > 0 && (
+                                  <p className="text-[12px] text-amber-600 mt-1">
+                                    以下 code 因無對應餐點已被跳過：{importedSkippedCodes.join(', ')}
+                                  </p>
+                                )}
+                                <p className="text-[12px] text-ink/40 mt-2">視窗即將關閉…</p>
+                              </div>
+                            )}
             </div>
 
             <div className="px-6 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0">
@@ -671,11 +681,10 @@ export default function AdminOrderPage() {
                     type="button"
                     onClick={handleConfirmImport}
                     disabled={
-                      importLoading ||
-                      (importPreview?.errors?.length ?? 0) > 0 ||
-                      (importPreview?.valid?.length ?? 0) === 0 ||
-                      computeUnmappedCodes().length > 0
-                    }
+                                          importLoading ||
+                                          (importPreview?.errors?.length ?? 0) > 0 ||
+                                          (importPreview?.valid?.length ?? 0) === 0
+                                        }
                     className="text-[12px] px-3 py-1.5 rounded-md bg-clay text-white hover:bg-clay-deep disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {importLoading ? '匯入中…' : '確認匯入'}

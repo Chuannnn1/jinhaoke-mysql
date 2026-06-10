@@ -139,7 +139,8 @@ export async function POST(request: Request) {
     // 產生訂單編號：A + YYYYMMDD + 4 碼當日流水（從 DB max 推算 + 1）
     // 注意：order_date 必須是 YYYY-MM-DD（reports 用 dashed 格式查詢）；
     //       order_id 用 compact 格式保留流水號可讀性。
-    const isoDate = new Date().toISOString().slice(0, 10) // '2026-06-09'
+    // 用台灣時區 (UTC+8) — 凌晨點餐避免 toISOString() (UTC) 把 order_date 算成前一天
+    const isoDate = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
     const compact = isoDate.replace(/-/g, '')              // '20260609'
     const prefix = `A${compact}`
 

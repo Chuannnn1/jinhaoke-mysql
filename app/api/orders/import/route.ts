@@ -349,14 +349,9 @@ export async function POST(request: Request) {
       )
     }
     if (unmappedCodes.length > 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `仍有未對應的品項 code：${unmappedCodes.join(', ')}`,
-          unmapped_codes: unmappedCodes,
-        },
-        { status: 400 }
-      )
+      // 不再阻擋匯入：有未對應 code 時跳過該品項，繼續匯入其餘可對應的項目
+      // （unmapped 品項會在 import 階段被 filter 掉）
+      console.warn(`CSV import 發現未對應 code：${unmappedCodes.join(', ')}，將跳過這些品項`)
     }
 
     const insertOrder = db.prepare(`
@@ -404,10 +399,17 @@ export async function POST(request: Request) {
     })
     tx()
 
+    // 實際有寫入品項的訂單數（排除全部都是 unmapped code 的訂單）
+    const actualImportedOrders = valid.filter(o =>
+      o.items.some(it => it.item_id !== undefined && it.unit_price !== undefined)
+    )
+
     return NextResponse.json({
       success: true,
       preview: false,
-      imported: valid.length,
+      imported: actualImportedOrders.length,
+      total_csv_orders: valid.length,
+      skipped_unmapped_codes: unmappedCodes.length > 0 ? unmappedCodes : undefined,
     })
   } catch (error) {
     console.error('POST /api/orders/import error:', error)

@@ -31,7 +31,9 @@ export async function GET(req: Request) {
   try {
     const db = getDb()
     const { searchParams } = new URL(req.url)
-    const date = searchParams.get('date') ?? new Date().toISOString().slice(0, 10)  // 預設今天
+    // 預設「今天」用台灣時區 (UTC+8)；toISOString 本身是 UTC，台灣早上 8 點前會撈到前一天
+    const todayTW = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+    const date = searchParams.get('date') ?? todayTW
 
     // 驗證日期格式
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {

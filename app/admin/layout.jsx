@@ -39,11 +39,11 @@ export default function AdminLayout({ children }) {
             <a
               key={item.label}
               href={item.href}
-              className={`block px-3 py-2 rounded-md text-sm transition-colors ${
-                isActive(item.href)
-                  ? 'font-medium text-clay bg-clay-soft'
-                  : 'text-ink-mute hover:text-ink hover:bg-gray-100'
-              }`}
+              className={`block px-3 py-2 rounded-md text-sm transition-colors cursor-pointer ${
+                              isActive(item.href)
+                                ? 'font-medium text-clay bg-clay-soft'
+                                : 'text-ink-mute hover:text-ink hover:bg-gray-100'
+                            }`}
             >
               {item.label}
             </a>
