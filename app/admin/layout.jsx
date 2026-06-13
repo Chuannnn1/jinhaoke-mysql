@@ -6,7 +6,6 @@ const NAV = [
   { label: '當日訂單', href: '/admin' },
   { label: '庫存管理', href: '/admin/inventory' },
   { label: '菜單管理', href: '/admin/menu' },
-  { label: '採購',     href: '/admin/purchase-orders' },
   { label: '採購管理', href: '/admin/purchase' },
   { label: '報表',     href: '/admin/reports' },
 ]
@@ -16,10 +15,6 @@ export default function AdminLayout({ children }) {
 
   const isActive = (href) => {
     if (href === '/admin') return pathname === '/admin'
-    // /admin/purchase 不能蓋住 /admin/purchase-orders
-    if (href === '/admin/purchase') {
-      return pathname === '/admin/purchase' || pathname.startsWith('/admin/purchase/')
-    }
     return pathname.startsWith(href)
   }
 

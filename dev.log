@@ -70,3 +70,112 @@ POST /api/orders/import error: TypeError: Content-Type was not one of "multipart
 [db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
  POST /api/orders/import 200 in 24ms
  POST /api/purchase-orders 201 in 32ms
+ GET / 200 in 186ms
+ ✓ Compiled /api/menu/availability in 184ms (260 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/menu 200 in 3471ms
+ GET /api/menu/availability 200 in 3545ms
+ GET /api/menu 200 in 94ms
+ GET /api/menu/availability 200 in 52ms
+ ○ Compiling /admin ...
+ ✓ Compiled /admin in 651ms (503 modules)
+ GET /admin 200 in 2896ms
+ ✓ Compiled /api/orders in 147ms (270 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/orders 200 in 372ms
+ GET /api/orders 200 in 19ms
+ GET /api/orders 200 in 70ms
+ GET /api/orders 200 in 90ms
+ GET /api/orders 200 in 61ms
+ GET /api/orders 200 in 33ms
+ GET /api/orders 200 in 50ms
+ GET /api/orders 200 in 41ms
+ GET /api/orders 200 in 55ms
+ GET /api/orders 200 in 53ms
+ ✓ Compiled /admin/purchase in 241ms (270 modules)
+ GET /admin/purchase 200 in 531ms
+ ✓ Compiled /api/ingredients in 200ms (272 modules)
+ ✓ Compiled (276 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/purchase 200 in 1113ms
+ GET /api/suppliers 200 in 1118ms
+ GET /api/ingredients 200 in 1128ms
+ GET /api/purchase 200 in 23ms
+ GET /api/suppliers 200 in 28ms
+ GET /api/ingredients 200 in 30ms
+ ✓ Compiled /admin/dashboard in 296ms (517 modules)
+ GET /admin/dashboard 200 in 623ms
+ ✓ Compiled /api/inventory in 148ms (282 modules)
+ ✓ Compiled (286 modules)
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/reports/daily?date=2026-06-09 200 in 520ms
+ GET /api/reports/monthly?year=2026&month=6 200 in 556ms
+ GET /api/inventory 200 in 559ms
+ GET /api/orders 200 in 564ms
+ GET /api/reports/daily?date=2026-06-09 200 in 41ms
+ GET /api/inventory 200 in 47ms
+ GET /api/orders 200 in 48ms
+ GET /api/reports/monthly?year=2026&month=6 200 in 56ms
+ ○ Compiling /admin/reports ...
+ ✓ Compiled /admin/reports in 880ms (529 modules)
+ GET /admin/reports 200 in 1115ms
+[db] 資料庫初始化完成，DB 路徑： C:\Users\Chuannnn\Documents\GitHub\jinhaoke\data\jinhaoke.db
+ GET /api/reports/daily?date=2026-06-09 200 in 37ms
+ GET /api/reports/daily?date=2026-06-08 200 in 29ms
+ GET /api/reports/daily?date=2026-06-07 200 in 29ms
+ GET /api/reports/daily?date=2026-06-06 200 in 28ms
+ GET /api/reports/daily?date=2026-06-05 200 in 27ms
+ GET /api/reports/daily?date=2026-06-04 200 in 27ms
+ GET /api/reports/daily?date=2026-06-03 200 in 13ms
+ GET /api/reports/daily?date=2026-05-31 200 in 25ms
+ GET /api/reports/daily?date=2026-06-02 200 in 25ms
+ GET /api/reports/daily?date=2026-06-01 200 in 25ms
+ GET /api/reports/daily?date=2026-05-30 200 in 24ms
+ GET /api/reports/daily?date=2026-05-29 200 in 24ms
+ GET /api/reports/daily?date=2026-05-28 200 in 21ms
+ GET /api/reports/monthly?year=2026&month=4 200 in 18ms
+ GET /api/reports/monthly?year=2026&month=6 200 in 29ms
+ GET /api/reports/monthly?year=2026&month=2 200 in 29ms
+ GET /api/reports/monthly?year=2026&month=1 200 in 28ms
+ GET /api/reports/daily?date=2026-05-27 200 in 32ms
+ GET /api/reports/monthly?year=2026&month=5 200 in 33ms
+ GET /api/reports/monthly?year=2026&month=3 200 in 23ms
+ GET /api/reports/daily?date=2026-06-08 200 in 71ms
+ GET /api/reports/daily?date=2026-06-09 200 in 71ms
+ GET /api/reports/daily?date=2026-06-07 200 in 70ms
+ GET /api/reports/daily?date=2026-06-06 200 in 70ms
+ GET /api/reports/daily?date=2026-06-05 200 in 67ms
+ GET /api/reports/daily?date=2026-06-04 200 in 66ms
+ GET /api/reports/daily?date=2026-06-03 200 in 73ms
+ GET /api/reports/daily?date=2026-06-02 200 in 92ms
+ GET /api/reports/daily?date=2026-05-31 200 in 92ms
+ GET /api/reports/daily?date=2026-06-01 200 in 91ms
+ GET /api/reports/daily?date=2026-05-30 200 in 90ms
+ GET /api/reports/daily?date=2026-05-29 200 in 89ms
+ GET /api/reports/daily?date=2026-05-28 200 in 26ms
+ GET /api/reports/monthly?year=2026&month=4 200 in 50ms
+ GET /api/reports/monthly?year=2026&month=6 200 in 49ms
+ GET /api/reports/monthly?year=2026&month=2 200 in 49ms
+ GET /api/reports/monthly?year=2026&month=1 200 in 48ms
+ GET /api/reports/monthly?year=2026&month=5 200 in 46ms
+ GET /api/reports/daily?date=2026-05-27 200 in 57ms
+ GET /api/reports/monthly?year=2026&month=3 200 in 17ms
+ ✓ Compiled in 4.6s (492 modules)
+ ✓ Compiled in 350ms (253 modules)
+ ✓ Compiled in 442ms (253 modules)
+ ✓ Compiled in 283ms (253 modules)
+ ✓ Compiled in 915ms (492 modules)
+ ✓ Compiled in 646ms (492 modules)
+ ✓ Compiled in 598ms (492 modules)
+ ✓ Compiled in 673ms (492 modules)
+ ✓ Compiled in 1279ms (492 modules)
+ ✓ Compiled in 651ms (492 modules)
+ ✓ Compiled in 720ms (492 modules)
+ ✓ Compiled in 702ms (492 modules)
+ ✓ Compiled in 608ms (492 modules)
+ ✓ Compiled in 2.6s (253 modules)
+ ✓ Compiled in 795ms (253 modules)
+ ✓ Compiled in 641ms (253 modules)
+ ✓ Compiled in 496ms (253 modules)
+ ✓ Compiled in 560ms (253 modules)
+[?25h

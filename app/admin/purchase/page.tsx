@@ -101,18 +101,19 @@ export default function PurchasePage() {
     fetchIngredients()
   }, [fetchOrders, fetchSuppliers, fetchIngredients])
 
-  const handleChangeStatus = async (poId: number, newStatus: StatusType) => {
+  const handleReceive = async (poId: number) => {
+    if (!window.confirm(`確認 PO #${poId} 已驗貨入庫？此動作將自動將訂購量加進庫存。`)) return
     try {
       const res = await fetch(`/api/purchase/${poId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: '已驗貨' }),
       })
       const data = await res.json()
       if (data.success) {
         fetchOrders()
       } else {
-        window.alert(data.error || '更新失敗')
+        window.alert(data.error || '驗貨失敗')
       }
     } catch {
       window.alert('網路錯誤')
@@ -198,15 +199,14 @@ export default function PurchasePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <select
-                      value={po.status}
-                      onChange={e => handleChangeStatus(po.po_id, e.target.value as StatusType)}
-                      className="px-2 py-1 border border-border rounded text-xs bg-white text-ink/70 focus:outline-none focus:ring-1 focus:ring-clay"
-                    >
-                      {STATUS_OPTIONS.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
+                    {po.status === '已訂購' && (
+                      <button
+                        onClick={() => handleReceive(po.po_id)}
+                        className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600 transition-colors"
+                      >
+                        驗貨入庫
+                      </button>
+                    )}
                     <button
                       onClick={() =>
                         setExpandedPo(expandedPo === po.po_id ? null : po.po_id)
