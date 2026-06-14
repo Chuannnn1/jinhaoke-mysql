@@ -39,6 +39,7 @@ interface ValidItemPreview {
   item_name?: string
   unit_price?: number
   item_id?: number
+  is_active?: number          // 1=上架中, 0=已下架（如：滷豬腳便當）
 }
 
 interface ValidOrderPreview {
@@ -60,6 +61,7 @@ interface MenuLookupRow {
   item_id: number
   name: string
   price: number
+  is_active: number
 }
 
 function splitCsvLine(line: string): string[] {
@@ -172,9 +174,9 @@ export async function POST(request: Request) {
 
     const db = getDb()
 
-    // 預載 menu_item
+    // 預載 menu_item（含已下架；用 code === item_id 自動對應，避免要使用者手動下拉）
     const menuRows = db
-      .prepare('SELECT item_id, name, price FROM menu_item WHERE is_active = 1 ORDER BY item_id')
+      .prepare('SELECT item_id, name, price, is_active FROM menu_item ORDER BY item_id')
       .all() as MenuLookupRow[]
     const menuById = new Map<number, MenuLookupRow>()
     for (const m of menuRows) menuById.set(m.item_id, m)
@@ -279,6 +281,14 @@ export async function POST(request: Request) {
       }
     }
 
+    // 自動對應：code 直接等於 menu_item.item_id（依編號表 1:1 對應，含已下架品項）
+    // 使用者手動傳入的 mapping 優先生效，僅在缺漏時補上自動對應
+    for (const code of Array.from(codeSet)) {
+      if (!mapping[String(code)] && menuById.has(code)) {
+        mapping[String(code)] = code
+      }
+    }
+
     // 計算 unmapped_codes：在 codeSet 中且 mapping 沒給對應 item_id
     const unmappedCodes: number[] = []
     for (const code of Array.from(codeSet).sort((a, b) => a - b)) {
@@ -301,6 +311,7 @@ export async function POST(request: Request) {
           item_name: menu?.name,
           unit_price: menu?.price,
           item_id: menu?.item_id,
+          is_active: menu?.is_active,
         }
       })
       // total：已 mapping 的相加；未 mapping 算 0（預覽時呈現部分）
@@ -337,7 +348,12 @@ export async function POST(request: Request) {
         valid,
         errors,
         unmapped_codes: unmappedCodes,
-        menu_options: menuRows.map(m => ({ item_id: m.item_id, name: m.name, price: m.price })),
+        menu_options: menuRows.map(m => ({
+          item_id: m.item_id,
+          name: m.name,
+          price: m.price,
+          is_active: m.is_active,
+        })),
       })
     }
 

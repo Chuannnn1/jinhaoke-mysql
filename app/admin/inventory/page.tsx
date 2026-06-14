@@ -24,6 +24,24 @@ interface Supplier {
   phone: string | null
 }
 
+interface LowStockSupplierOption {
+  supplier_name: string
+  is_primary: number
+  price_per_order_unit: number | null
+}
+
+interface LowStockItem {
+  name: string
+  stock_qty: number
+  safety_stock: number
+  stock_unit: string
+  order_unit: string
+  qty_per_order_unit: number
+  suggested_qty: number
+  default_supplier: string | null
+  suppliers: LowStockSupplierOption[]
+}
+
 type TabKey = 'inventory' | 'suppliers'
 
 const CATEGORIES = ['全部', '肉類', '海鮮', '乾貨', '調味料', '耗材']
@@ -112,6 +130,11 @@ function InventoryTab() {
   const [autoGenLoading, setAutoGenLoading] = useState(false)
   const [toast, setToast] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null)
 
+  // 低庫存警示彈窗：第一次進入頁面、且偵測到有低庫存品項時自動顯示
+  const [lowAlertOpen, setLowAlertOpen] = useState(false)
+  const [lowItems, setLowItems] = useState<LowStockItem[]>([])
+  const [lowLoading, setLowLoading] = useState(false)
+
   const fetchInventory = useCallback(async () => {
     try {
       const res = await fetch('/api/inventory')
@@ -138,6 +161,27 @@ function InventoryTab() {
     fetchSuppliers()
   }, [fetchInventory, fetchSuppliers])
 
+  // 第一次進來自動掃低庫存（每個 session 只跳一次）
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (window.sessionStorage.getItem('lowStockAlertShown') === '1') return
+    let cancelled = false
+    setLowLoading(true)
+    fetch('/api/inventory/low-stock')
+      .then(r => r.json())
+      .then((data: { success: boolean; data?: LowStockItem[] }) => {
+        if (cancelled) return
+        if (data.success && data.data && data.data.length > 0) {
+          setLowItems(data.data)
+          setLowAlertOpen(true)
+        }
+        window.sessionStorage.setItem('lowStockAlertShown', '1')
+      })
+      .catch(() => { /* silent */ })
+      .finally(() => { if (!cancelled) setLowLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const filtered = useMemo(() => inventory.filter(item => {
     const cat = guessCategory(item.name)
     const matchCategory = activeCategory === '全部' || cat === activeCategory
@@ -160,24 +204,55 @@ function InventoryTab() {
   const lowStockCount = inventory.filter(i => i.safety_stock > 0 && i.stock_qty <= i.safety_stock).length
   const criticalCount = inventory.filter(i => i.safety_stock > 0 && i.stock_qty <= i.safety_stock * 0.5).length
 
-  const handleAutoGenerate = async () => {
-    if (!window.confirm('將為所有低於安全庫存的食材，按供應商建立採購單。確定繼續？')) return
+  // 手動開啟低庫存彈窗（按鈕觸發，繞過 sessionStorage 限制）
+  const openLowStockModal = async () => {
     setAutoGenLoading(true)
     setToast(null)
     try {
-      const res = await fetch('/api/purchase/auto-generate', { method: 'POST' })
+      const res = await fetch('/api/inventory/low-stock')
+      const data = await res.json()
+      if (data.success) {
+        if ((data.data ?? []).length === 0) {
+          setToast({ type: 'info', text: '目前沒有低於安全庫存的食材' })
+        } else {
+          setLowItems(data.data)
+          setLowAlertOpen(true)
+        }
+      } else {
+        setToast({ type: 'error', text: data.error || '讀取失敗' })
+      }
+    } catch {
+      setToast({ type: 'error', text: '網路錯誤' })
+    } finally {
+      setAutoGenLoading(false)
+      setTimeout(() => setToast(null), 6000)
+    }
+  }
+
+  // 彈窗按「建立採購單」後：把使用者調整過的 items 送給 auto-generate
+  const handleConfirmLowStock = async (
+    items: Array<{ ingredient_name: string; supplier_name: string; order_qty: number }>
+  ) => {
+    setAutoGenLoading(true)
+    setToast(null)
+    try {
+      const res = await fetch('/api/purchase/auto-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      })
       const data = await res.json()
       if (data.success) {
         const created = data.data?.created_count ?? 0
-        const covered = data.data?.covered_ingredients ?? []
         if (created === 0) {
-          setToast({ type: 'info', text: '目前沒有低於安全庫存的食材，無需建單' })
+          setToast({ type: 'info', text: '沒有需要建單的品項' })
         } else {
           setToast({
             type: 'success',
-            text: `已建立 ${created} 張採購單，覆蓋 ${covered.length} 項食材，前往 /admin/purchase 查看`,
+            text: `已建立 ${created} 張採購單，覆蓋 ${data.data?.covered_ingredients?.length ?? 0} 項食材`,
           })
         }
+        setLowAlertOpen(false)
         fetchInventory()
       } else {
         setToast({ type: 'error', text: data.error || '建單失敗' })
@@ -263,12 +338,12 @@ function InventoryTab() {
           ))}
         </div>
         <button
-          onClick={handleAutoGenerate}
-          disabled={autoGenLoading}
+          onClick={openLowStockModal}
+          disabled={autoGenLoading || lowLoading}
           className="ml-auto px-3 py-1.5 bg-clay text-white text-xs rounded-lg hover:bg-clay-deep transition-colors font-medium disabled:opacity-50"
-          title="按供應商建立採購單，補滿至 2 倍安全庫存"
+          title="查看低於安全庫存的食材，選擇廠商後一鍵建單"
         >
-          {autoGenLoading ? '建單中…' : '自動補貨建議'}
+          {autoGenLoading ? '處理中…' : '低庫存補貨'}
         </button>
         <button
           onClick={fetchInventory}
@@ -393,6 +468,15 @@ function InventoryTab() {
           item={editTarget}
           onClose={() => setEditTarget(null)}
           onSaved={() => { setEditTarget(null); fetchInventory() }}
+        />
+      )}
+
+      {lowAlertOpen && (
+        <LowStockAlertModal
+          items={lowItems}
+          submitting={autoGenLoading}
+          onClose={() => setLowAlertOpen(false)}
+          onConfirm={handleConfirmLowStock}
         />
       )}
     </>
@@ -796,5 +880,187 @@ function SuppliersTab() {
         </div>
       )}
     </>
+  )
+}
+
+// ============================================================
+// 低庫存警示彈窗
+//   - 列出所有低於安全庫存的食材
+//   - 每筆可選廠商（多家者可下拉）、可改建議數量（單位 = stock_unit）
+//   - 按「建立採購單」會按 supplier 分組建單
+// ============================================================
+interface LowDraftRow {
+  ingredient_name: string
+  supplier_name: string
+  order_qty: string
+  stock_unit: string
+}
+
+function LowStockAlertModal({
+  items,
+  submitting,
+  onClose,
+  onConfirm,
+}: {
+  items: LowStockItem[]
+  submitting: boolean
+  onClose: () => void
+  onConfirm: (rows: Array<{ ingredient_name: string; supplier_name: string; order_qty: number }>) => void
+}) {
+  const [draft, setDraft] = useState<LowDraftRow[]>(() =>
+    items.map(it => ({
+      ingredient_name: it.name,
+      supplier_name:
+        it.suppliers.find(s => s.is_primary === 1)?.supplier_name ??
+        it.suppliers[0]?.supplier_name ??
+        it.default_supplier ??
+        '',
+      order_qty: String(it.suggested_qty || ''),
+      stock_unit: it.stock_unit,
+    }))
+  )
+
+  const update = (idx: number, patch: Partial<LowDraftRow>) => {
+    setDraft(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+  }
+
+  const validRows = useMemo(
+    () =>
+      draft
+        .map(r => ({
+          ingredient_name: r.ingredient_name,
+          supplier_name: r.supplier_name,
+          order_qty: Number(r.order_qty),
+        }))
+        .filter(r => r.supplier_name && Number.isFinite(r.order_qty) && r.order_qty > 0),
+    [draft]
+  )
+
+  // 預覽：按 supplier 分組會開幾張單
+  const groupedCount = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of validRows) set.add(r.supplier_name)
+    return set.size
+  }, [validRows])
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-200 flex items-start justify-between">
+          <div>
+            <h3 className="font-semibold text-ink text-lg flex items-center gap-2">
+              <span className="text-amber-500">⚠</span>
+              低庫存提醒
+            </h3>
+            <p className="text-xs text-ink/50 mt-1">
+              以下 <span className="font-semibold text-red-600">{items.length}</span> 項食材已低於安全庫存。
+              確認廠商與數量後，可一鍵生成採購單（依廠商分組）。
+            </p>
+          </div>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink text-2xl leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-ink/50 text-xs uppercase tracking-wide border-b border-gray-200">
+                <th className="text-left pb-2">品名</th>
+                <th className="text-right pb-2">庫存 / 安全</th>
+                <th className="text-left pb-2 pl-3">廠商</th>
+                <th className="text-right pb-2">叫貨數量</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => {
+                const row = draft[idx]
+                const supList = it.suppliers
+                const selected = supList.find(s => s.supplier_name === row.supplier_name)
+                return (
+                  <tr key={it.name} className="border-b border-gray-100">
+                    <td className="py-3 font-medium text-ink">{it.name}</td>
+                    <td className="py-3 text-right font-mono text-xs">
+                      <span className="text-red-600 font-semibold">{formatQty(it.stock_qty)}</span>
+                      <span className="text-ink/30"> / {formatQty(it.safety_stock)}</span>
+                      <span className="text-ink/30 ml-1">{it.stock_unit}</span>
+                    </td>
+                    <td className="py-3 pl-3">
+                      {supList.length === 0 ? (
+                        <span className="text-xs text-red-500">無廠商</span>
+                      ) : supList.length === 1 ? (
+                        <span className="text-xs text-ink/70">
+                          {supList[0].supplier_name}
+                          <span className="text-amber-600 ml-1">★</span>
+                        </span>
+                      ) : (
+                        <select
+                          value={row.supplier_name}
+                          onChange={e => update(idx, { supplier_name: e.target.value })}
+                          className="px-2 py-1 border border-border rounded text-xs bg-white text-ink/80 focus:outline-none focus:ring-1 focus:ring-clay"
+                        >
+                          {supList.map(s => (
+                            <option key={s.supplier_name} value={s.supplier_name}>
+                              {s.supplier_name}
+                              {s.is_primary === 1 ? ' ★' : ''}
+                              {s.price_per_order_unit !== null
+                                ? ` (NT$${s.price_per_order_unit}/${it.order_unit})`
+                                : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {selected?.price_per_order_unit !== null && selected?.price_per_order_unit !== undefined && (
+                        <p className="text-[10px] text-ink/40 mt-0.5">
+                          參考價 NT${selected.price_per_order_unit} / {it.order_unit}
+                        </p>
+                      )}
+                    </td>
+                    <td className="py-3 text-right">
+                      <div className="inline-flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={row.order_qty}
+                          onChange={e => update(idx, { order_qty: e.target.value })}
+                          className="w-20 px-2 py-1 border border-border rounded text-xs text-right font-mono focus:outline-none focus:ring-1 focus:ring-clay"
+                        />
+                        <span className="text-xs text-ink/40">{it.stock_unit}</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          <div className="mt-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800">
+            數量留空或填 0 的項目會被略過。同廠商的多項食材會合併在同一張採購單。
+          </div>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between shrink-0">
+          <span className="text-xs text-ink/50">
+            將建立 <span className="font-semibold text-ink">{groupedCount}</span> 張採購單，共
+            <span className="font-semibold text-ink"> {validRows.length}</span> 項食材
+          </span>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm text-ink/50 hover:text-ink transition-colors disabled:opacity-50"
+            >
+              暫時略過
+            </button>
+            <button
+              onClick={() => onConfirm(validRows)}
+              disabled={submitting || validRows.length === 0}
+              className="px-5 py-2 bg-clay text-white text-sm rounded-lg hover:bg-clay-deep transition-colors font-medium disabled:opacity-50"
+            >
+              {submitting ? '建立中…' : '生成採購單'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }

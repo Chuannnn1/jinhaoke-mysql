@@ -175,3 +175,24 @@ CREATE TABLE IF NOT EXISTS return_order (
 );
 
 CREATE INDEX IF NOT EXISTS idx_return_po ON return_order(po_id);
+
+-- ============================================================
+-- (11) 食材—供應商 ingredient_supplier — M:N（一品多廠）
+--   每個食材可以從多家供應商叫貨。
+--   is_primary=1 標示老闆預設用的廠商；建議每個食材至少 1 筆 primary。
+--   price_per_order_unit 紀錄該廠商該品項的單價（可選，方便估價）。
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ingredient_supplier (
+    ingredient_name      TEXT    NOT NULL,
+    supplier_name        TEXT    NOT NULL,
+    is_primary           INTEGER NOT NULL DEFAULT 0,
+    price_per_order_unit REAL,
+    PRIMARY KEY (ingredient_name, supplier_name),
+    FOREIGN KEY (ingredient_name) REFERENCES ingredient(name)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (supplier_name) REFERENCES supplier(name)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_ing_sup_ingredient ON ingredient_supplier(ingredient_name);
+CREATE INDEX IF NOT EXISTS idx_ing_sup_supplier   ON ingredient_supplier(supplier_name);

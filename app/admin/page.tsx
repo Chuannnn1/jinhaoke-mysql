@@ -8,6 +8,7 @@ interface ImportValidItem {
   item_name?: string
   unit_price?: number
   item_id?: number
+  is_active?: number
 }
 
 interface ImportValidOrder {
@@ -29,6 +30,7 @@ interface ImportMenuOption {
   item_id: number
   name: string
   price: number
+  is_active?: number
 }
 
 interface ImportPreviewResponse {
@@ -52,11 +54,11 @@ interface ImportPreviewResponse {
 }
 
 const COLUMNS = [
-  { key: '待製作',  label: '待製作',  color: 'bg-amber-50 border-amber-200',   badge: 'bg-amber-400 text-white' },
-  { key: '製作中',  label: '製作中',  color: 'bg-blue-50 border-blue-200',      badge: 'bg-blue-500 text-white' },
-  { key: '待付款',  label: '待付款',  color: 'bg-orange-50 border-orange-200', badge: 'bg-orange-500 text-white' },
-  { key: '已完成',  label: '已完成',  color: 'bg-green-50 border-green-200',   badge: 'bg-green-500 text-white' },
-  { key: '已取消',  label: '已取消',  color: 'bg-red-50 border-red-200',        badge: 'bg-red-400 text-white' },
+  { key: '待製作', label: '待製作', color: 'bg-amber-50  border-amber-300',  header: 'bg-amber-100/70  text-amber-700',  badge: 'bg-amber-500 text-white' },
+  { key: '製作中', label: '製作中', color: 'bg-blue-50   border-blue-300',   header: 'bg-blue-100/70   text-blue-700',   badge: 'bg-blue-500  text-white' },
+  { key: '待付款', label: '待付款', color: 'bg-orange-50 border-orange-300', header: 'bg-orange-100/70 text-orange-700', badge: 'bg-orange-500 text-white' },
+  { key: '已完成', label: '已完成', color: 'bg-green-50  border-green-300',  header: 'bg-green-100/70  text-green-700',  badge: 'bg-green-500 text-white' },
+  { key: '已取消', label: '已取消', color: 'bg-red-50    border-red-300',    header: 'bg-red-100/70    text-red-700',    badge: 'bg-red-500   text-white' },
 ]
 
 // API 英文 key ↔ DB 中文 status 對應
@@ -320,18 +322,18 @@ export default function AdminOrderPage() {
                     onDragOver={e => handleDragOver(e, col.key)}
                     onDragLeave={handleDragLeave}
                     onDrop={e => handleDrop(e, col.key)}
-                    className={`flex flex-col rounded-xl border-2 transition-all duration-200 ${
+                    className={`flex flex-col rounded-2xl border-2 shadow-sm overflow-hidden transition-all duration-200 ${
                       dragOverCol === col.key
-                        ? `${col.color} border-dashed border-2 border-clay`
+                        ? `${col.color} border-dashed border-clay shadow-md`
                         : `${col.color} border-solid`
                     }`}
                   >
                     {/* Column header */}
-                                        <div className="flex items-center justify-between px-4 py-3 shrink-0 cursor-default">
-                                          <span className={`text-sm font-semibold font-body ${col.key === '已完成' ? 'text-green-600' : 'text-ink'}`}>
-                                            {col.label}
-                                          </span>
-                      <span className={`w-6 h-6 rounded-full ${col.badge} text-[11px] font-bold flex items-center justify-center`}>
+                    <div className={`flex items-center justify-between px-4 py-3 shrink-0 cursor-default ${col.header}`}>
+                      <span className="text-sm font-semibold font-body tracking-wide">
+                        {col.label}
+                      </span>
+                      <span className={`min-w-[1.5rem] h-6 px-1.5 rounded-full ${col.badge} text-[11px] font-bold flex items-center justify-center`}>
                         {colOrders.length}
                       </span>
                     </div>
@@ -415,6 +417,7 @@ export default function AdminOrderPage() {
                   </p>
                   <ul className="text-[12px] text-ink/50 list-disc pl-5 space-y-0.5">
                     <li>品項以分號分隔 code，可加 *N 表數量（例：5;7*3）</li>
+                    <li>code 直接對應菜單 item_id；已下架品項（如 6 號滷豬腳便當）仍會自動辨識並標記</li>
                     <li>付款狀態 0 = 待付款；1 = 已完成</li>
                     <li>電話接受 3~15 碼或 null</li>
                   </ul>
@@ -506,6 +509,7 @@ export default function AdminOrderPage() {
                                 {menuOptions.map(m => (
                                   <option key={m.item_id} value={m.item_id}>
                                     [{m.item_id}] {m.name} (NT$ {m.price})
+                                    {m.is_active === 0 ? ' — 已下架' : ''}
                                   </option>
                                 ))}
                               </select>
@@ -573,9 +577,20 @@ export default function AdminOrderPage() {
                                         }`}>{o.status}</span>
                                       </td>
                                       <td className="px-3 py-2 text-ink/70">
-                                        {o.items.map(it =>
-                                          `${it.item_name ?? `?code${it.code}`}×${it.qty}`
-                                        ).join('、')}
+                                        {o.items.map((it, i) => (
+                                          <span key={i}>
+                                            {i > 0 && '、'}
+                                            <span className={it.item_id === undefined ? 'text-amber-600' : ''}>
+                                              {it.item_name ?? `?code${it.code}`}
+                                            </span>
+                                            {it.is_active === 0 && (
+                                              <span className="ml-1 px-1 py-[1px] rounded text-[10px] bg-gray-200 text-gray-600 font-medium align-middle">
+                                                已下架
+                                              </span>
+                                            )}
+                                            <span className="text-ink/50">×{it.qty}</span>
+                                          </span>
+                                        ))}
                                       </td>
                                       <td className="px-3 py-2 text-right font-mono text-clay font-semibold">
                                         NT$ {o.total}
@@ -615,7 +630,18 @@ export default function AdminOrderPage() {
                                                 <tr key={idx} className="border-t border-border/40">
                                                   <td className="py-1 font-mono">{it.code}</td>
                                                   <td className="py-1 text-ink/70">
-                                                    {it.item_name ?? <span className="text-amber-600">（未對應）</span>}
+                                                    {it.item_name ? (
+                                                      <span>
+                                                        {it.item_name}
+                                                        {it.is_active === 0 && (
+                                                          <span className="ml-1.5 px-1 py-[1px] rounded text-[10px] bg-gray-200 text-gray-600 font-medium align-middle">
+                                                            已下架
+                                                          </span>
+                                                        )}
+                                                      </span>
+                                                    ) : (
+                                                      <span className="text-amber-600">（未對應）</span>
+                                                    )}
                                                   </td>
                                                   <td className="py-1 text-right font-mono">{it.qty}</td>
                                                   <td className="py-1 text-right font-mono text-ink/50">

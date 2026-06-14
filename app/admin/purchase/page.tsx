@@ -65,6 +65,7 @@ export default function PurchasePage() {
   const [error, setError] = useState<string | null>(null)
   const [expandedPo, setExpandedPo] = useState<number | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
+  const [returnTarget, setReturnTarget] = useState<PurchaseOrder | null>(null)
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -207,6 +208,24 @@ export default function PurchasePage() {
                         驗貨入庫
                       </button>
                     )}
+                    {(po.status === '已驗貨' || po.status === '部分退貨') && (
+                      <button
+                        onClick={() => setReturnTarget(po)}
+                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
+                        title="登錄退貨（會從庫存扣回）"
+                      >
+                        退貨
+                      </button>
+                    )}
+                    <a
+                      href={`/admin/purchase/${po.po_id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 border border-clay/30 text-clay rounded-lg text-xs hover:bg-clay/5 transition-colors"
+                      title="開啟列印版採購單"
+                    >
+                      🖨 列印
+                    </a>
                     <button
                       onClick={() =>
                         setExpandedPo(expandedPo === po.po_id ? null : po.po_id)
@@ -263,6 +282,17 @@ export default function PurchasePage() {
           onClose={() => setModalOpen(false)}
           onCreated={() => {
             setModalOpen(false)
+            fetchOrders()
+          }}
+        />
+      )}
+
+      {returnTarget && (
+        <ReturnModal
+          po={returnTarget}
+          onClose={() => setReturnTarget(null)}
+          onDone={() => {
+            setReturnTarget(null)
             fetchOrders()
           }}
         />
@@ -514,6 +544,193 @@ function CreatePOModal({
           >
             {submitting ? '建立中…' : '建立採購單'}
           </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ============================================================
+// 退貨 Modal
+//   - 列出 PO 內所有食材
+//   - 老闆勾要退的、填數量與原因
+//   - 逐筆 POST /api/purchase-orders/:id/return（既有 API 維持不動）
+//   - 庫存會自動扣回，不足時 API 會擋
+// ============================================================
+function ReturnModal({
+  po,
+  onClose,
+  onDone,
+}: {
+  po: PurchaseOrder
+  onClose: () => void
+  onDone: () => void
+}) {
+  type Row = { ingredient_name: string; order_qty: number; checked: boolean; return_qty: string; reason: string }
+
+  const [rows, setRows] = useState<Row[]>(() =>
+    (po.items ?? []).map(it => ({
+      ingredient_name: it.ingredient_name,
+      order_qty: it.order_qty,
+      checked: false,
+      return_qty: '',
+      reason: '',
+    }))
+  )
+  const [submitting, setSubmitting] = useState(false)
+  const [errors, setErrors] = useState<string[]>([])
+
+  const update = (idx: number, patch: Partial<Row>) => {
+    setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
+  }
+
+  const valid = rows
+    .filter(r => r.checked)
+    .map(r => ({ ...r, num: Number(r.return_qty) }))
+
+  const canSubmit = valid.length > 0 && valid.every(r => Number.isFinite(r.num) && r.num > 0 && r.num <= r.order_qty)
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return
+    setSubmitting(true)
+    setErrors([])
+    const errs: string[] = []
+    for (const r of valid) {
+      try {
+        const res = await fetch(`/api/purchase-orders/${po.po_id}/return`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ingredient_name: r.ingredient_name,
+            return_qty: r.num,
+            return_reason: r.reason.trim() || undefined,
+          }),
+        })
+        const data = await res.json()
+        if (!data.success) errs.push(`${r.ingredient_name}：${data.error || '退貨失敗'}`)
+      } catch {
+        errs.push(`${r.ingredient_name}：網路錯誤`)
+      }
+    }
+    setSubmitting(false)
+    if (errs.length > 0) {
+      setErrors(errs)
+      return
+    }
+    onDone()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[88vh] flex flex-col overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-200 flex items-start justify-between">
+          <div>
+            <h3 className="font-semibold text-ink text-lg flex items-center gap-2">
+              <span className="text-red-500">↩</span>
+              退貨登錄 — PO #{po.po_id}
+            </h3>
+            <p className="text-xs text-ink/50 mt-1">
+              廠商：<span className="font-semibold text-ink">{po.supplier_name}</span> · 勾選要退的食材並填寫退回數量
+            </p>
+          </div>
+          <button onClick={onClose} className="text-ink/40 hover:text-ink text-2xl leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {rows.length === 0 ? (
+            <p className="text-center text-ink/30 py-10">此採購單沒有明細</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-ink/50 text-xs uppercase tracking-wide border-b border-gray-200">
+                  <th className="w-8 pb-2"></th>
+                  <th className="text-left pb-2">食材</th>
+                  <th className="text-right pb-2">叫貨量</th>
+                  <th className="text-right pb-2 pl-2">退回量</th>
+                  <th className="text-left pb-2 pl-3">原因</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r, idx) => {
+                  const num = Number(r.return_qty)
+                  const overQty = r.checked && Number.isFinite(num) && num > r.order_qty
+                  return (
+                    <tr key={r.ingredient_name} className="border-b border-gray-100">
+                      <td className="py-3">
+                        <input
+                          type="checkbox"
+                          checked={r.checked}
+                          onChange={e => update(idx, { checked: e.target.checked })}
+                          className="w-4 h-4 accent-red-500"
+                        />
+                      </td>
+                      <td className="py-3 font-medium text-ink">{r.ingredient_name}</td>
+                      <td className="py-3 text-right font-mono text-ink/60 text-xs">{r.order_qty}</td>
+                      <td className="py-3 text-right pl-2">
+                        <input
+                          type="number"
+                          step="any"
+                          min="0"
+                          max={r.order_qty}
+                          disabled={!r.checked}
+                          value={r.return_qty}
+                          onChange={e => update(idx, { return_qty: e.target.value })}
+                          placeholder="0"
+                          className={`w-20 px-2 py-1 border rounded text-xs text-right font-mono focus:outline-none focus:ring-1 disabled:bg-gray-50 disabled:text-ink/30 ${
+                            overQty ? 'border-red-400 focus:ring-red-400' : 'border-border focus:ring-clay'
+                          }`}
+                        />
+                      </td>
+                      <td className="py-3 pl-3">
+                        <input
+                          type="text"
+                          disabled={!r.checked}
+                          value={r.reason}
+                          onChange={e => update(idx, { reason: e.target.value })}
+                          placeholder="例：發霉、規格不符"
+                          className="w-full px-2 py-1 border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-clay disabled:bg-gray-50 disabled:text-ink/30"
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+
+          {errors.length > 0 && (
+            <div className="mt-4 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 space-y-1">
+              {errors.map((e, i) => (
+                <p key={i}>· {e}</p>
+              ))}
+            </div>
+          )}
+
+          <p className="mt-3 text-[11px] text-ink/40">
+            送出後庫存會自動扣回對應數量；若庫存不足以退貨，API 會擋下並提示。
+          </p>
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between shrink-0">
+          <span className="text-xs text-ink/50">
+            將登錄 <span className="font-semibold text-red-600">{valid.length}</span> 筆退貨
+          </span>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              disabled={submitting}
+              className="px-4 py-2 text-sm text-ink/50 hover:text-ink transition-colors disabled:opacity-50"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!canSubmit || submitting}
+              className="px-5 py-2 bg-red-500 text-white text-sm rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50"
+            >
+              {submitting ? '送出中…' : '確認退貨'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

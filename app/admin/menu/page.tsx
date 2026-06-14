@@ -28,12 +28,15 @@ type FormData = {
 }
 
 // 預設分類（即使 DB 還沒任何 item 也會顯示）
-const DEFAULT_MENU_CATEGORIES = ['手作便當', '單點', '飲料']
+const DEFAULT_MENU_CATEGORIES = ['手作便當', '燴飯', '單點']
 // 舊資料（後台手動誤加）會有「便當」，UI 上一律歸到「手作便當」
 const LEGACY_CATEGORY_MAP: Record<string, string> = {
   '便當': '手作便當',
 }
 const normalizeCategory = (c: string) => LEGACY_CATEGORY_MAP[c] ?? c
+
+// 特殊膠囊：選中時只顯示已下架品項（不受 category 限制）
+const PILL_INACTIVE = '已下架'
 
 const EMPTY_FORM: FormData = {
   name: '',
@@ -53,7 +56,6 @@ export default function MenuPage() {
   const [error, setError] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState('全部')
   const [search, setSearch] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState<MenuItem | null>(null)
@@ -67,8 +69,8 @@ export default function MenuPage() {
   const fetchMenu = useCallback(async () => {
     setLoading(true)
     try {
-      const url = showInactive ? '/api/menu?include_inactive=1' : '/api/menu'
-      const res = await fetch(url)
+      // 一律抓全部（含已下架）；前端用「已下架」膠囊切換顯示
+      const res = await fetch('/api/menu?include_inactive=1')
       const data = await res.json()
       if (data.success) setItems(data.data)
       else setError(data.error || '讀取失敗')
@@ -77,34 +79,66 @@ export default function MenuPage() {
     } finally {
       setLoading(false)
     }
-  }, [showInactive])
+  }, [])
 
   useEffect(() => { fetchMenu() }, [fetchMenu])
 
   const filtered = items.filter(item => {
-    const matchActive = showInactive || item.is_active === 1
-    const matchCat =
+    const matchSearch = search === '' || item.name.includes(search)
+    if (!matchSearch) return false
+
+    // 「已下架」膠囊：只顯示 is_active = 0，不再受 category 限制
+    if (activeCategory === PILL_INACTIVE) return item.is_active !== 1
+
+    // 其餘膠囊只看上架中
+    if (item.is_active !== 1) return false
+    return (
       activeCategory === '全部' ||
       item.category === activeCategory ||
       normalizeCategory(item.category) === activeCategory
-    const matchSearch = search === '' || item.name.includes(search)
-    return matchActive && matchCat && matchSearch
+    )
   })
 
   const totalItems = items.filter(i => i.is_active === 1).length
+  const inactiveCount = items.filter(i => i.is_active !== 1).length
   const categoryCount = new Set(
     items.filter(i => i.is_active === 1).map(i => normalizeCategory(i.category))
   ).size
 
   // 動態組合 filter chip：預設 + 實際 DB 出現的分類（先 normalize 去掉舊「便當」）
+  // 已下架的品項分類不會擠進這份清單（避免出現只剩已下架的舊分類）
   const dynamicCategorySet = new Set<string>(DEFAULT_MENU_CATEGORIES)
   for (const i of items) {
-    if (!i.category) continue
+    if (!i.category || i.is_active !== 1) continue
     dynamicCategorySet.add(normalizeCategory(i.category))
   }
   const CATEGORIES = ['全部', ...Array.from(dynamicCategorySet)]
   // 新增/編輯 form 的下拉選項（不含「全部」，也不含舊「便當」）
   const MENU_CATEGORIES = Array.from(dynamicCategorySet)
+
+  // 把篩出來的品項依分類分組，渲染時做 section 標題
+  const groupedByCategory: Array<{ category: string; items: MenuItem[] }> = (() => {
+    const order = Array.from(dynamicCategorySet)
+    const map = new Map<string, MenuItem[]>()
+    for (const it of filtered) {
+      const cat = normalizeCategory(it.category) || '其他'
+      if (!map.has(cat)) map.set(cat, [])
+      map.get(cat)!.push(it)
+    }
+    // 先照 DEFAULT_MENU_CATEGORIES 的順序排，剩下的補後面
+    const seen = new Set<string>()
+    const out: Array<{ category: string; items: MenuItem[] }> = []
+    for (const cat of order) {
+      if (map.has(cat)) {
+        out.push({ category: cat, items: map.get(cat)! })
+        seen.add(cat)
+      }
+    }
+    for (const [cat, list] of map) {
+      if (!seen.has(cat)) out.push({ category: cat, items: list })
+    }
+    return out
+  })()
 
   const resetFileState = () => {
     setPendingFile(null)
@@ -296,16 +330,7 @@ export default function MenuPage() {
                 onChange={e => setSearch(e.target.value)}
                 className="px-3 py-2 border border-border rounded-lg text-sm w-64 bg-white focus:outline-none focus:ring-2 focus:ring-clay"
               />
-              <label className="flex items-center gap-2 text-sm text-ink/70 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={showInactive}
-                  onChange={e => setShowInactive(e.target.checked)}
-                  className="w-4 h-4 accent-clay"
-                />
-                顯示已下架
-              </label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {CATEGORIES.map(cat => (
                   <button
                     key={cat}
@@ -319,6 +344,26 @@ export default function MenuPage() {
                     {cat}
                   </button>
                 ))}
+                {/* 已下架特殊膠囊：點下去只看下架的品項 */}
+                <button
+                  onClick={() => setActiveCategory(PILL_INACTIVE)}
+                  className={`px-3 py-1.5 rounded-full text-sm transition-colors inline-flex items-center gap-1.5 ${
+                    activeCategory === PILL_INACTIVE
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white text-red-600 border border-red-200 hover:bg-red-50'
+                  }`}
+                >
+                  已下架
+                  {inactiveCount > 0 && (
+                    <span
+                      className={`px-1.5 py-[1px] rounded-full text-[10px] font-bold ${
+                        activeCategory === PILL_INACTIVE ? 'bg-white/30 text-white' : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {inactiveCount}
+                    </span>
+                  )}
+                </button>
               </div>
               <div className="flex-1" />
               <button
@@ -329,109 +374,118 @@ export default function MenuPage() {
               </button>
             </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-ink/50 text-left text-xs uppercase tracking-wide">
-                    <th className="px-4 py-3 font-medium w-16 text-center">圖片</th>
-                    <th className="px-4 py-3 font-medium">品名</th>
-                    <th className="px-4 py-3 font-medium">分類</th>
-                    <th className="px-4 py-3 font-medium">標籤</th>
-                    <th className="px-4 py-3 font-medium text-right">價格</th>
-                    <th className="px-4 py-3 font-medium">副標 / 選項</th>
-                    <th className="px-4 py-3 font-medium text-right">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((item, idx) => {
-                    const inactive = item.is_active !== 1
-                    const baseRow = inactive
-                      ? 'opacity-50 bg-gray-100'
-                      : idx % 2 === 0
-                        ? 'bg-white'
-                        : 'bg-gray-50/20'
-                    return (
-                      <tr
-                        key={item.item_id}
-                        className={`border-t border-gray-200 hover:bg-gray-50/50 transition-colors ${baseRow}`}
-                      >
-                        <td className="px-4 py-3 text-center">
-                          {item.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="w-10 h-10 rounded-md object-cover inline-block"
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-md bg-gray-100 inline-flex items-center justify-center text-[10px] text-ink/30">
-                              無圖
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="font-medium text-ink">{item.name}</span>
-                          {inactive && (
-                            <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 align-middle">
-                              已下架
-                            </span>
-                          )}
-                          {item.description && (
-                            <p className="text-xs text-ink/40 mt-0.5 truncate max-w-[180px]">
-                              {item.description}
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-clay-soft text-clay font-medium">
-                            {item.category}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-ink/50 text-xs">{item.tag || '—'}</td>
-                        <td className="px-4 py-3 text-right font-mono font-semibold text-ink">
-                          ${item.price}
-                        </td>
-                        <td className="px-4 py-3 text-xs text-ink/50">
-                          {[item.sub, item.option].filter(Boolean).join(' · ') || '—'}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => openEdit(item)}
-                              className="px-3 py-1 text-xs rounded-md border border-border text-clay hover:bg-gray-50 transition-colors"
-                            >
-                              編輯
-                            </button>
-                            {inactive ? (
-                              <button
-                                onClick={() => handleReactivate(item)}
-                                className="px-3 py-1 text-xs rounded-md border border-green-200 text-green-600 hover:bg-green-50 transition-colors"
-                              >
-                                重新上架
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleDelete(item)}
-                                className="px-3 py-1 text-xs rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
-                              >
-                                下架
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            {/* 分組品項列表（每個 category 一段 + 全寬橫線分隔） */}
+            {filtered.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm text-center py-12 text-ink/30">
+                {items.length === 0 ? '尚無品項' : '沒有符合的品項'}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {groupedByCategory.map(group => (
+                  <section key={group.category} className="bg-white rounded-xl shadow-sm overflow-hidden">
+                    {/* Section header — 全寬橫線到底 */}
+                    <div className="flex items-center px-5 py-3 bg-clay-soft/40 border-b-2 border-clay/40">
+                      <span className="text-sm font-semibold text-clay tracking-wide whitespace-nowrap">
+                        {group.category}
+                      </span>
+                      <span className="ml-2 text-[11px] text-clay/60 font-mono">
+                        {group.items.length} 項
+                      </span>
+                      <span className="flex-1 ml-3 border-t border-clay/40"></span>
+                    </div>
 
-              {filtered.length === 0 && (
-                <div className="text-center py-12 text-ink/30">
-                  {items.length === 0 ? '尚無品項' : '沒有符合的品項'}
-                </div>
-              )}
-            </div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-gray-50/60 text-ink/50 text-left text-xs uppercase tracking-wide">
+                          <th className="px-4 py-2 font-medium w-16 text-center">圖片</th>
+                          <th className="px-4 py-2 font-medium">品名</th>
+                          <th className="px-4 py-2 font-medium">標籤</th>
+                          <th className="px-4 py-2 font-medium text-right">價格</th>
+                          <th className="px-4 py-2 font-medium">副標 / 選項</th>
+                          <th className="px-4 py-2 font-medium text-right">操作</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {group.items.map((item, idx) => {
+                          const inactive = item.is_active !== 1
+                          const baseRow = inactive
+                            ? 'opacity-60 bg-gray-100/60'
+                            : idx % 2 === 0
+                              ? 'bg-white'
+                              : 'bg-gray-50/20'
+                          return (
+                            <tr
+                              key={item.item_id}
+                              className={`border-t border-gray-200 hover:bg-gray-50/50 transition-colors ${baseRow}`}
+                            >
+                              <td className="px-4 py-3 text-center">
+                                {item.image_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={item.image_url}
+                                    alt={item.name}
+                                    className="w-10 h-10 rounded-md object-cover inline-block"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-md bg-gray-100 inline-flex items-center justify-center text-[10px] text-ink/30">
+                                    無圖
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="font-medium text-ink">{item.name}</span>
+                                {inactive && (
+                                  <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 align-middle">
+                                    已下架
+                                  </span>
+                                )}
+                                {item.description && (
+                                  <p className="text-xs text-ink/40 mt-0.5 truncate max-w-[180px]">
+                                    {item.description}
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-ink/50 text-xs">{item.tag || '—'}</td>
+                              <td className="px-4 py-3 text-right font-mono font-semibold text-ink">
+                                ${item.price}
+                              </td>
+                              <td className="px-4 py-3 text-xs text-ink/50">
+                                {[item.sub, item.option].filter(Boolean).join(' · ') || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => openEdit(item)}
+                                    className="px-3 py-1 text-xs rounded-md border border-border text-clay hover:bg-gray-50 transition-colors"
+                                  >
+                                    編輯
+                                  </button>
+                                  {inactive ? (
+                                    <button
+                                      onClick={() => handleReactivate(item)}
+                                      className="px-3 py-1 text-xs rounded-md border border-green-200 text-green-600 hover:bg-green-50 transition-colors"
+                                    >
+                                      重新上架
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleDelete(item)}
+                                      className="px-3 py-1 text-xs rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                                    >
+                                      下架
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </section>
+                ))}
+              </div>
+            )}
           </>
         )}
       </main>
