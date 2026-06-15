@@ -4,7 +4,9 @@ import Database from 'better-sqlite3'
 import path from 'path'
 import fs from 'fs'
 
-const DB_PATH = path.join(process.cwd(), 'data', 'jinhaoke.db')
+// DB_PATH env 優先（部署環境用 /var/lib/jinhaoke/jinhaoke.db）；
+// 否則 fallback 到 repo 內 data/jinhaoke.db（本機開發預設）
+const DB_PATH = process.env.DB_PATH || path.join(process.cwd(), 'data', 'jinhaoke.db')
 const SCHEMA_PATH = path.join(process.cwd(), 'lib', 'schema.sql')
 
 let db: Database.Database | null = null

@@ -44,7 +44,7 @@ const MENU_ITEMS = [
   { name: '酥嫩雞腿便當',    category: '手作便當', price: 130, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '酥嫩雞腿配三樣配菜',         image_url: '/uploads/menu/炸雞腿手作便當.webp' },
   { name: '紅麴豬五花便當',  category: '手作便當', price: 120, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '紅麴豬五花配三樣配菜',       image_url: '/uploads/menu/紅麴豬手作便當.webp' },
   { name: '酥炸排骨便當',    category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '無骨',         option: '',                description: '無骨酥炸排骨配三樣配菜',     image_url: '/uploads/menu/炸排骨手作便當.webp' },
-  { name: '滷豬腳便當',      category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '滷豬腳配三樣配菜',           image_url: '' },
+  { name: '滷豬腳便當',      category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '滷豬腳配三樣配菜',           image_url: '', is_active: 0 },
   { name: '滷雞腿便當',      category: '手作便當', price: 100, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '滷雞腿配三樣配菜',           image_url: '/uploads/menu/滷雞腿手作便當.webp' },
   { name: '滷排骨便當',      category: '手作便當', price: 100, emoji: '🥚', tag: '豬',   sub: '帶骨·附滷蛋',  option: '',                description: '帶骨滷排骨附滷蛋配三樣配菜', image_url: '/uploads/menu/滷排骨手作便當.webp' },
 
@@ -63,11 +63,11 @@ const MENU_ITEMS = [
   { name: '沙茶燴豬肉',      category: '單點',     price: 80,  emoji: '🐷', tag: '豬',   sub: '',             option: '加肉50 / 加菜10', description: '沙茶燴豬肉',                 image_url: '/uploads/menu/沙茶豬肉燴飯.webp' },
   { name: '酥炸排骨',        category: '單點',     price: 70,  emoji: '🐷', tag: '豬',   sub: '無骨',         option: '',                description: '無骨',                       image_url: '/uploads/menu/炸排骨手作便當.webp' },
   { name: '滷雞腿',          category: '單點',     price: 70,  emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '滷雞腿',                     image_url: '/uploads/menu/滷雞腿手作便當.webp' },
-  { name: '季節炒時蔬',      category: '單點',     price: 60,  emoji: '🥬', tag: '其他', sub: '',             option: '',                description: '時令蔬菜',                   image_url: '/uploads/menu/紅麴豬手作便當.webp' },
-  { name: '白飯',            category: '單點',     price: 20,  emoji: '🍚', tag: '其他', sub: '',             option: '',                description: '白飯',                       image_url: '/uploads/menu/炸豬排手作便當.webp' },
-  { name: '滷蛋',            category: '單點',     price: 15,  emoji: '🥚', tag: '其他', sub: '',             option: '',                description: '滷蛋',                       image_url: '/uploads/menu/滷排骨手作便當.webp' },
-  { name: '加購湯品',        category: '單點',     price: 10,  emoji: '🍜', tag: '其他', sub: '',             option: '',                description: '例湯',                       image_url: '/uploads/menu/炸雞腿手作便當.webp' },
-  { name: '加購菜脯',        category: '單點',     price: 5,   emoji: '🥢', tag: '其他', sub: '原味/辣味',    option: '',                description: '原味/辣味',                  image_url: '/uploads/menu/滷雞腿手作便當.webp' },
+  { name: '季節炒時蔬',      category: '單點',     price: 60,  emoji: '🥬', tag: '其他', sub: '',             option: '',                description: '時令蔬菜',                   image_url: '/uploads/menu/單點 - 季節時蔬.webp' },
+  { name: '白飯',            category: '單點',     price: 20,  emoji: '🍚', tag: '其他', sub: '',             option: '',                description: '白飯',                       image_url: '/uploads/menu/單點 - 白飯.webp' },
+  { name: '滷蛋',            category: '單點',     price: 15,  emoji: '🥚', tag: '其他', sub: '',             option: '',                description: '滷蛋',                       image_url: '/uploads/menu/單點 - 滷蛋.webp' },
+  { name: '加購湯品',        category: '單點',     price: 10,  emoji: '🍜', tag: '其他', sub: '',             option: '',                description: '例湯',                       image_url: '/uploads/menu/單點 - 加購湯品.webp' },
+  { name: '加購菜脯',        category: '單點',     price: 5,   emoji: '🥢', tag: '其他', sub: '原味/辣味',    option: '',                description: '原味/辣味',                  image_url: '/uploads/menu/單點  - 菜脯.webp' },
 ]
 
 // recipe: [menu_name, ingredient_name, consume_qty]
@@ -150,18 +150,19 @@ function seedAll(db) {
       const hasImageUrl = db.prepare("PRAGMA table_info(menu_item)").all().some(c => c.name === 'image_url')
       const stmt = hasImageUrl
         ? db.prepare(`
-            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description, image_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description, image_url, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
         : db.prepare(`
-            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description, is_active)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `)
       for (const m of MENU_ITEMS) {
+        const active = m.is_active === undefined ? 1 : m.is_active
         if (hasImageUrl) {
-          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, m.image_url || '')
+          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, m.image_url || '', active)
         } else {
-          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description)
+          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, active)
         }
       }
       log(`menu_item : 寫入 ${MENU_ITEMS.length} 筆${hasImageUrl ? '（含 image_url）' : ''}`)
