@@ -20,6 +20,7 @@ interface PurchaseOrderItem {
   ingredient_name: string
   order_qty: number
   total_cost: number
+  returned_qty?: number
 }
 
 interface ApiResponse<T = unknown> {
@@ -31,7 +32,7 @@ interface ApiResponse<T = unknown> {
 interface CreatePOBody {
   po_date?: string
   supplier_name: string
-  status?: '已訂購' | '已驗貨' | '部分退貨'
+  status?: '已訂購' | '已驗貨' | '已退貨'
   items: Array<{
     ingredient_name: string
     order_qty: number
@@ -70,8 +71,17 @@ export async function GET(req: Request) {
       FROM purchase_order_item
       WHERE po_id = ?
     `)
+    const returnedSumStmt = db.prepare(`
+      SELECT ingredient_name, COALESCE(SUM(return_qty), 0) AS s
+      FROM return_order WHERE po_id = ?
+      GROUP BY ingredient_name
+    `)
     for (const order of orders) {
-      order.items = itemStmt.all(order.po_id) as PurchaseOrderItem[]
+      const items = itemStmt.all(order.po_id) as PurchaseOrderItem[]
+      const returned = returnedSumStmt.all(order.po_id) as Array<{ ingredient_name: string; s: number }>
+      const byIng = new Map(returned.map(r => [r.ingredient_name, Number(r.s) || 0]))
+      for (const it of items) it.returned_qty = byIng.get(it.ingredient_name) || 0
+      order.items = items
     }
 
     return NextResponse.json<ApiResponse<PurchaseOrder[]>>(
@@ -133,7 +143,7 @@ export async function POST(req: Request) {
 
     // 狀態白名單
     const status = body.status ?? '已訂購'
-    if (!['已訂購', '已驗貨', '部分退貨'].includes(status)) {
+    if (!['已訂購', '已驗貨', '已退貨'].includes(status)) {
       return NextResponse.json<ApiResponse>(
         { success: false, error: `非法狀態：${status}` },
         { status: 400 }

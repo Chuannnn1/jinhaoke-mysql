@@ -112,7 +112,10 @@ export async function POST(
       }
 
       // 2. 更新進貨單狀態與總金額
-      const newStatus = hasPartialReturn ? '部分退貨' : '已驗貨'
+      // 驗貨時即使有少收（hasPartialReturn）也只算 '已驗貨'；
+      // 退貨單獨流程：之後從 /api/purchase-orders/:id/return 才會推進到 '已退貨'。
+      const newStatus = '已驗貨'
+      void hasPartialReturn
       db.prepare(`
         UPDATE purchase_order
         SET status = ?, total_amount = ?

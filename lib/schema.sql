@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS purchase_order (
     supplier_name  TEXT    NOT NULL,
     total_amount   REAL    NOT NULL DEFAULT 0,    -- 總金額（驗貨後彙總）
     status         TEXT    NOT NULL DEFAULT '已訂購'
-                   CHECK (status IN ('已訂購','已驗貨','部分退貨')),
+                   CHECK (status IN ('已訂購','已驗貨','已退貨')),
     FOREIGN KEY (supplier_name) REFERENCES supplier(name)
         ON UPDATE CASCADE ON DELETE RESTRICT
 );
@@ -160,21 +160,23 @@ CREATE TABLE IF NOT EXISTS purchase_order_item (
 
 -- ============================================================
 -- (10) 退貨單 return_order
---     複合 FK 參考 purchase_order_item（po_id, ingredient_name）
+--     同一 (po_id, ingredient_name) 可以有多筆退貨記錄
+--     因此 PK 改用 return_id autoincrement；(po_id, ingredient_name) 留 index
 -- ============================================================
 CREATE TABLE IF NOT EXISTS return_order (
+    return_id        INTEGER PRIMARY KEY AUTOINCREMENT,
     po_id            INTEGER NOT NULL,
     ingredient_name  TEXT    NOT NULL,
     return_date      TEXT    NOT NULL,
     return_reason    TEXT,
     return_qty       REAL    NOT NULL,
-    PRIMARY KEY (po_id, ingredient_name),
     FOREIGN KEY (po_id, ingredient_name)
         REFERENCES purchase_order_item(po_id, ingredient_name)
         ON UPDATE CASCADE ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_return_po ON return_order(po_id);
+CREATE INDEX IF NOT EXISTS idx_return_po_ing ON return_order(po_id, ingredient_name);
 
 -- ============================================================
 -- (11) 食材—供應商 ingredient_supplier — M:N（一品多廠）

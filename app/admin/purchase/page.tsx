@@ -16,12 +16,22 @@ interface PurchaseOrder {
   total_amount: number
   status: string
   items?: PurchaseItem[]
+  returns?: ReturnRecord[]
 }
 
 interface PurchaseItem {
   ingredient_name: string
   order_qty: number
   total_cost: number
+  returned_qty?: number  // 累計已退量
+}
+
+interface ReturnRecord {
+  return_id: number
+  ingredient_name: string
+  return_date: string
+  return_reason: string | null
+  return_qty: number
 }
 
 interface Supplier {
@@ -37,13 +47,30 @@ interface Ingredient {
   supplier_name: string | null
 }
 
-const STATUS_OPTIONS = ['已訂購', '已驗貨', '部分退貨'] as const
+const STATUS_OPTIONS = ['已訂購', '已驗貨', '已退貨'] as const
 type StatusType = (typeof STATUS_OPTIONS)[number]
 
 const STATUS_COLORS: Record<string, string> = {
   '已訂購':  'bg-blue-100 text-blue-700',
   '已驗貨':  'bg-green-100 text-green-700',
-  '部分退貨': 'bg-orange-100 text-orange-700',
+  '已退貨':  'bg-orange-100 text-orange-700',
+}
+
+// 計算 PO 是否「還能退貨」
+function getReturnableInfo(po: PurchaseOrder) {
+  const items = po.items ?? []
+  let totalOrder = 0
+  let totalReturned = 0
+  for (const it of items) {
+    totalOrder += it.order_qty
+    totalReturned += it.returned_qty || 0
+  }
+  return {
+    totalOrder,
+    totalReturned,
+    remaining: Math.max(0, totalOrder - totalReturned),
+    fullyReturned: totalOrder > 0 && totalReturned >= totalOrder,
+  }
 }
 
 function formatMoney(n: number): string {
@@ -191,13 +218,25 @@ export default function PurchasePage() {
                     <div className="text-sm font-mono text-clay">
                       NT$ {formatMoney(po.total_amount)}
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        STATUS_COLORS[po.status] ?? 'bg-gray-100'
-                      }`}
-                    >
-                      {po.status}
-                    </span>
+                    {(() => {
+                      const info = getReturnableInfo(po)
+                      const hasReturns = info.totalReturned > 0
+                      return (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            STATUS_COLORS[po.status] ?? 'bg-gray-100'
+                          }`}
+                          title={hasReturns ? `已退 ${formatQty(info.totalReturned)} / 訂購 ${formatQty(info.totalOrder)}` : undefined}
+                        >
+                          {po.status}
+                          {hasReturns && po.status === '已退貨' && (
+                            <span className="ml-1 font-mono">
+                              ({formatQty(info.totalReturned)}/{formatQty(info.totalOrder)})
+                            </span>
+                          )}
+                        </span>
+                      )
+                    })()}
                   </div>
                   <div className="flex items-center gap-2">
                     {po.status === '已訂購' && (
@@ -208,7 +247,7 @@ export default function PurchasePage() {
                         驗貨入庫
                       </button>
                     )}
-                    {(po.status === '已驗貨' || po.status === '部分退貨') && (
+                    {(po.status === '已驗貨' || po.status === '已退貨') && !getReturnableInfo(po).fullyReturned && (
                       <button
                         onClick={() => setReturnTarget(po)}
                         className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
@@ -237,36 +276,77 @@ export default function PurchasePage() {
                   </div>
                 </div>
 
-                {expandedPo === po.po_id && po.items && po.items.length > 0 && (
-                  <div className="px-5 py-3 bg-gray-50/50">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-ink/40 text-left uppercase tracking-wide">
-                          <th className="pb-1">食材</th>
-                          <th className="pb-1 text-right">訂購量</th>
-                          <th className="pb-1 text-right">成本</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {po.items.map(item => (
-                          <tr key={item.ingredient_name} className="border-t border-gray-200">
-                            <td className="py-1.5 text-ink">{item.ingredient_name}</td>
-                            <td className="py-1.5 text-right font-mono">
-                              {formatQty(item.order_qty)}
-                            </td>
-                            <td className="py-1.5 text-right font-mono text-clay">
-                              NT$ {formatMoney(item.total_cost)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
+                {expandedPo === po.po_id && (
+                  <div className="px-5 py-3 bg-gray-50/50 space-y-4">
+                    {/* 訂購明細 */}
+                    {po.items && po.items.length > 0 ? (
+                      <div>
+                        <p className="text-[11px] text-ink/40 uppercase tracking-wide mb-1">訂購明細</p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-ink/40 text-left uppercase tracking-wide">
+                              <th className="pb-1">食材</th>
+                              <th className="pb-1 text-right">訂購量</th>
+                              <th className="pb-1 text-right">已退</th>
+                              <th className="pb-1 text-right">剩餘</th>
+                              <th className="pb-1 text-right">成本</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {po.items.map(item => {
+                              const ret = item.returned_qty || 0
+                              const remain = item.order_qty - ret
+                              return (
+                                <tr key={item.ingredient_name} className="border-t border-gray-200">
+                                  <td className="py-1.5 text-ink">{item.ingredient_name}</td>
+                                  <td className="py-1.5 text-right font-mono">{formatQty(item.order_qty)}</td>
+                                  <td className={`py-1.5 text-right font-mono ${ret > 0 ? 'text-orange-600' : 'text-ink/30'}`}>
+                                    {ret > 0 ? formatQty(ret) : '—'}
+                                  </td>
+                                  <td className={`py-1.5 text-right font-mono ${remain <= 0 ? 'text-ink/30 line-through' : ''}`}>
+                                    {formatQty(remain)}
+                                  </td>
+                                  <td className="py-1.5 text-right font-mono text-clay">
+                                    NT$ {formatMoney(item.total_cost)}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-ink/30">（此單無明細）</p>
+                    )}
 
-                {expandedPo === po.po_id && (!po.items || po.items.length === 0) && (
-                  <div className="px-5 py-3 bg-gray-50/50 text-xs text-ink/30">
-                    （此單無明細）
+                    {/* 退貨歷史 */}
+                    {po.returns && po.returns.length > 0 && (
+                      <div>
+                        <p className="text-[11px] text-orange-600 uppercase tracking-wide mb-1">退貨歷史</p>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-ink/40 text-left uppercase tracking-wide">
+                              <th className="pb-1">日期</th>
+                              <th className="pb-1">食材</th>
+                              <th className="pb-1 text-right">退貨量</th>
+                              <th className="pb-1">原因</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {po.returns.map(r => (
+                              <tr key={r.return_id} className="border-t border-gray-200">
+                                <td className="py-1.5 font-mono text-ink/60">{r.return_date}</td>
+                                <td className="py-1.5 text-ink">{r.ingredient_name}</td>
+                                <td className="py-1.5 text-right font-mono text-orange-600">
+                                  {formatQty(r.return_qty)}
+                                </td>
+                                <td className="py-1.5 text-ink/60">{r.return_reason || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -551,11 +631,12 @@ function CreatePOModal({
 }
 
 // ============================================================
-// 退貨 Modal
-//   - 列出 PO 內所有食材
-//   - 老闆勾要退的、填數量與原因
-//   - 逐筆 POST /api/purchase-orders/:id/return（既有 API 維持不動）
-//   - 庫存會自動扣回，不足時 API 會擋
+// 退貨 Modal（v2）
+//   - 三欄數量顯示：叫貨 / 已退 / 可退
+//   - 輸入框 max 動態用「可退量」，不會讓 user 填超出
+//   - 「全部退貨」快捷按鈕：把所有可退 row 勾起來 + 填滿
+//   - 可退 = 0 的 row 自動 disabled，不能勾選
+//   - 提交時逐筆 POST，API 會做最終 cumulative check
 // ============================================================
 function ReturnModal({
   po,
@@ -566,16 +647,29 @@ function ReturnModal({
   onClose: () => void
   onDone: () => void
 }) {
-  type Row = { ingredient_name: string; order_qty: number; checked: boolean; return_qty: string; reason: string }
+  type Row = {
+    ingredient_name: string
+    order_qty: number
+    returned_qty: number
+    remaining: number
+    checked: boolean
+    return_qty: string
+    reason: string
+  }
 
   const [rows, setRows] = useState<Row[]>(() =>
-    (po.items ?? []).map(it => ({
-      ingredient_name: it.ingredient_name,
-      order_qty: it.order_qty,
-      checked: false,
-      return_qty: '',
-      reason: '',
-    }))
+    (po.items ?? []).map(it => {
+      const ret = it.returned_qty || 0
+      return {
+        ingredient_name: it.ingredient_name,
+        order_qty: it.order_qty,
+        returned_qty: ret,
+        remaining: Math.max(0, it.order_qty - ret),
+        checked: false,
+        return_qty: '',
+        reason: '',
+      }
+    })
   )
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<string[]>([])
@@ -584,11 +678,21 @@ function ReturnModal({
     setRows(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
   }
 
+  // 全部退貨：把可退 > 0 的 row 都勾起來、return_qty 填到 remaining
+  const handleReturnAll = () => {
+    setRows(prev => prev.map(r => r.remaining > 0
+      ? { ...r, checked: true, return_qty: String(r.remaining) }
+      : r
+    ))
+  }
+
   const valid = rows
-    .filter(r => r.checked)
+    .filter(r => r.checked && r.remaining > 0)
     .map(r => ({ ...r, num: Number(r.return_qty) }))
 
-  const canSubmit = valid.length > 0 && valid.every(r => Number.isFinite(r.num) && r.num > 0 && r.num <= r.order_qty)
+  const canSubmit =
+    valid.length > 0 &&
+    valid.every(r => Number.isFinite(r.num) && r.num > 0 && r.num <= r.remaining)
 
   const handleSubmit = async () => {
     if (!canSubmit) return
@@ -620,9 +724,11 @@ function ReturnModal({
     onDone()
   }
 
+  const anyRemaining = rows.some(r => r.remaining > 0)
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[88vh] flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl mx-4 max-h-[88vh] flex flex-col overflow-hidden">
         <div className="px-6 py-5 border-b border-gray-200 flex items-start justify-between">
           <div>
             <h3 className="font-semibold text-ink text-lg flex items-center gap-2">
@@ -630,7 +736,8 @@ function ReturnModal({
               退貨登錄 — PO #{po.po_id}
             </h3>
             <p className="text-xs text-ink/50 mt-1">
-              廠商：<span className="font-semibold text-ink">{po.supplier_name}</span> · 勾選要退的食材並填寫退回數量
+              廠商：<span className="font-semibold text-ink">{po.supplier_name}</span>
+              ·「叫貨 / 已退 / 可退」三欄，填入要退的數量
             </p>
           </div>
           <button onClick={onClose} className="text-ink/40 hover:text-ink text-2xl leading-none">×</button>
@@ -639,63 +746,89 @@ function ReturnModal({
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {rows.length === 0 ? (
             <p className="text-center text-ink/30 py-10">此採購單沒有明細</p>
+          ) : !anyRemaining ? (
+            <p className="text-center text-ink/40 py-10">此採購單已全數退貨，無可退項目</p>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-ink/50 text-xs uppercase tracking-wide border-b border-gray-200">
-                  <th className="w-8 pb-2"></th>
-                  <th className="text-left pb-2">食材</th>
-                  <th className="text-right pb-2">叫貨量</th>
-                  <th className="text-right pb-2 pl-2">退回量</th>
-                  <th className="text-left pb-2 pl-3">原因</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, idx) => {
-                  const num = Number(r.return_qty)
-                  const overQty = r.checked && Number.isFinite(num) && num > r.order_qty
-                  return (
-                    <tr key={r.ingredient_name} className="border-b border-gray-100">
-                      <td className="py-3">
-                        <input
-                          type="checkbox"
-                          checked={r.checked}
-                          onChange={e => update(idx, { checked: e.target.checked })}
-                          className="w-4 h-4 accent-red-500"
-                        />
-                      </td>
-                      <td className="py-3 font-medium text-ink">{r.ingredient_name}</td>
-                      <td className="py-3 text-right font-mono text-ink/60 text-xs">{r.order_qty}</td>
-                      <td className="py-3 text-right pl-2">
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          max={r.order_qty}
-                          disabled={!r.checked}
-                          value={r.return_qty}
-                          onChange={e => update(idx, { return_qty: e.target.value })}
-                          placeholder="0"
-                          className={`w-20 px-2 py-1 border rounded text-xs text-right font-mono focus:outline-none focus:ring-1 disabled:bg-gray-50 disabled:text-ink/30 ${
-                            overQty ? 'border-red-400 focus:ring-red-400' : 'border-border focus:ring-clay'
-                          }`}
-                        />
-                      </td>
-                      <td className="py-3 pl-3">
-                        <input
-                          type="text"
-                          disabled={!r.checked}
-                          value={r.reason}
-                          onChange={e => update(idx, { reason: e.target.value })}
-                          placeholder="例：發霉、規格不符"
-                          className="w-full px-2 py-1 border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-clay disabled:bg-gray-50 disabled:text-ink/30"
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs text-ink/40">勾選要退的食材，或一鍵全退</p>
+                <button
+                  onClick={handleReturnAll}
+                  className="px-3 py-1 text-xs border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  全部退貨（剩餘量 {formatQty(rows.reduce((s, r) => s + r.remaining, 0))}）
+                </button>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-ink/50 text-xs uppercase tracking-wide border-b border-gray-200">
+                    <th className="w-8 pb-2"></th>
+                    <th className="text-left pb-2">食材</th>
+                    <th className="text-right pb-2">叫貨</th>
+                    <th className="text-right pb-2">已退</th>
+                    <th className="text-right pb-2">可退</th>
+                    <th className="text-right pb-2 pl-2">退回量</th>
+                    <th className="text-left pb-2 pl-3">原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, idx) => {
+                    const fullyReturned = r.remaining <= 0
+                    const num = Number(r.return_qty)
+                    const overQty = r.checked && Number.isFinite(num) && num > r.remaining
+                    return (
+                      <tr
+                        key={r.ingredient_name}
+                        className={`border-b border-gray-100 ${fullyReturned ? 'opacity-40' : ''}`}
+                      >
+                        <td className="py-3">
+                          <input
+                            type="checkbox"
+                            checked={r.checked}
+                            disabled={fullyReturned}
+                            onChange={e => update(idx, { checked: e.target.checked })}
+                            className="w-4 h-4 accent-red-500 disabled:cursor-not-allowed"
+                          />
+                        </td>
+                        <td className="py-3 font-medium text-ink">{r.ingredient_name}</td>
+                        <td className="py-3 text-right font-mono text-ink/60 text-xs">{formatQty(r.order_qty)}</td>
+                        <td className={`py-3 text-right font-mono text-xs ${r.returned_qty > 0 ? 'text-orange-600' : 'text-ink/30'}`}>
+                          {r.returned_qty > 0 ? formatQty(r.returned_qty) : '—'}
+                        </td>
+                        <td className={`py-3 text-right font-mono text-xs font-semibold ${fullyReturned ? 'text-ink/30' : 'text-emerald-600'}`}>
+                          {formatQty(r.remaining)}
+                        </td>
+                        <td className="py-3 text-right pl-2">
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            max={r.remaining}
+                            disabled={!r.checked || fullyReturned}
+                            value={r.return_qty}
+                            onChange={e => update(idx, { return_qty: e.target.value })}
+                            placeholder="0"
+                            className={`w-20 px-2 py-1 border rounded text-xs text-right font-mono focus:outline-none focus:ring-1 disabled:bg-gray-50 disabled:text-ink/30 ${
+                              overQty ? 'border-red-400 focus:ring-red-400' : 'border-border focus:ring-clay'
+                            }`}
+                          />
+                        </td>
+                        <td className="py-3 pl-3">
+                          <input
+                            type="text"
+                            disabled={!r.checked || fullyReturned}
+                            value={r.reason}
+                            onChange={e => update(idx, { reason: e.target.value })}
+                            placeholder="例：發霉、規格不符"
+                            className="w-full px-2 py-1 border border-border rounded text-xs focus:outline-none focus:ring-1 focus:ring-clay disabled:bg-gray-50 disabled:text-ink/30"
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </>
           )}
 
           {errors.length > 0 && (
@@ -707,7 +840,7 @@ function ReturnModal({
           )}
 
           <p className="mt-3 text-[11px] text-ink/40">
-            送出後庫存會自動扣回對應數量；若庫存不足以退貨，API 會擋下並提示。
+            送出後庫存自動扣回對應數量；庫存不足或超量會被擋下。退貨後 PO 自動推進為「已退貨」。
           </p>
         </div>
 

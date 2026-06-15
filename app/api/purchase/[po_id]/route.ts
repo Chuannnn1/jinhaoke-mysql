@@ -13,12 +13,22 @@ interface PurchaseOrder {
   total_amount: number
   status: string
   items?: PurchaseOrderItem[]
+  returns?: ReturnRecord[]
 }
 
 interface PurchaseOrderItem {
   ingredient_name: string
   order_qty: number
   total_cost: number
+  returned_qty?: number  // 累計已退量（GET 才有）
+}
+
+interface ReturnRecord {
+  return_id: number
+  ingredient_name: string
+  return_date: string
+  return_reason: string | null
+  return_qty: number
 }
 
 interface ApiResponse<T = unknown> {
@@ -28,7 +38,7 @@ interface ApiResponse<T = unknown> {
 }
 
 interface PatchBody {
-  status?: '已訂購' | '已驗貨' | '部分退貨'
+  status?: '已訂購' | '已驗貨' | '已退貨'
   items?: Array<{
     ingredient_name: string
     order_qty: number
@@ -36,7 +46,7 @@ interface PatchBody {
   }>
 }
 
-const ALLOWED_STATUS = ['已訂購', '已驗貨', '部分退貨'] as const
+const ALLOWED_STATUS = ['已訂購', '已驗貨', '已退貨'] as const
 
 function loadOrder(db: ReturnType<typeof getDb>, poId: number): PurchaseOrder | null {
   const po = db
@@ -45,11 +55,27 @@ function loadOrder(db: ReturnType<typeof getDb>, poId: number): PurchaseOrder | 
     )
     .get(poId) as PurchaseOrder | undefined
   if (!po) return null
-  po.items = db
+  const items = db
     .prepare(
       'SELECT ingredient_name, order_qty, total_cost FROM purchase_order_item WHERE po_id = ?'
     )
     .all(poId) as PurchaseOrderItem[]
+
+  // 補上累計已退量
+  const returnedSums = db
+    .prepare(
+      'SELECT ingredient_name, COALESCE(SUM(return_qty), 0) AS s FROM return_order WHERE po_id = ? GROUP BY ingredient_name'
+    )
+    .all(poId) as Array<{ ingredient_name: string; s: number }>
+  const byIng = new Map(returnedSums.map(r => [r.ingredient_name, Number(r.s) || 0]))
+  for (const it of items) it.returned_qty = byIng.get(it.ingredient_name) || 0
+
+  po.items = items
+  po.returns = db
+    .prepare(
+      'SELECT return_id, ingredient_name, return_date, return_reason, return_qty FROM return_order WHERE po_id = ? ORDER BY return_date DESC, return_id DESC'
+    )
+    .all(poId) as ReturnRecord[]
   return po
 }
 
