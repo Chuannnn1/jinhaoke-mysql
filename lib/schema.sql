@@ -179,6 +179,20 @@ CREATE INDEX IF NOT EXISTS idx_return_po ON return_order(po_id);
 CREATE INDEX IF NOT EXISTS idx_return_po_ing ON return_order(po_id, ingredient_name);
 
 -- ============================================================
+-- (11) 後台登入 session（單一密碼 + 30 天 cookie）
+--     刪除 row = 撤銷該 session；清空整表 = 強制所有 device 重新登入
+-- ============================================================
+CREATE TABLE IF NOT EXISTS admin_session (
+    token       TEXT    PRIMARY KEY,
+    created_at  TEXT    NOT NULL,
+    expires_at  TEXT    NOT NULL,
+    last_seen   TEXT,
+    user_agent  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_admin_session_expires ON admin_session(expires_at);
+
+-- ============================================================
 -- (11) 食材—供應商 ingredient_supplier — M:N（一品多廠）
 --   每個食材可以從多家供應商叫貨。
 --   is_primary=1 標示老闆預設用的廠商；建議每個食材至少 1 筆 primary。

@@ -1,5 +1,5 @@
 'use client'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 const NAV = [
   { label: '概覽',     href: '/admin/dashboard' },
@@ -11,10 +11,23 @@ const NAV = [
 
 export default function AdminLayout({ children }) {
   const pathname = usePathname()
+  const router = useRouter()
+
+  // 登入頁不套 admin 殼
+  if (pathname === '/admin/login' || pathname?.startsWith('/admin/login/')) {
+    return children
+  }
 
   const isActive = (href) => {
     if (href === '/admin') return pathname === '/admin'
     return pathname.startsWith(href)
+  }
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch { /* ignore */ }
+    router.replace('/admin/login')
   }
 
   return (
@@ -43,6 +56,14 @@ export default function AdminLayout({ children }) {
             </a>
           ))}
         </nav>
+        <div className="px-3 py-3 border-t border-border">
+          <button
+            onClick={handleLogout}
+            className="w-full text-left px-3 py-2 rounded-md text-xs text-ink-mute hover:text-red-600 hover:bg-red-50 transition-colors"
+          >
+            登出
+          </button>
+        </div>
       </aside>
       <div className="flex-1 flex flex-col overflow-hidden">
         {children}
