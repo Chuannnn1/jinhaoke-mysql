@@ -100,8 +100,23 @@ function LineChart({
   })
   const polyline = points.map(p => `${p.x},${p.y}`).join(' ')
 
-  // x 軸標籤：太多時跳著顯示
+  // x 軸標籤：太多時跳著顯示；最後一筆若太靠近前一筆 stride 點就 replace（避免重疊）
   const xLabelStride = Math.max(1, Math.floor(data.length / 10))
+  const xLabelIdxs = (() => {
+    const idxs: number[] = []
+    for (let i = 0; i < data.length; i += xLabelStride) idxs.push(i)
+    const last = data.length - 1
+    if (idxs.length === 0) {
+      idxs.push(last)
+    } else if (idxs[idxs.length - 1] !== last) {
+      if (last - idxs[idxs.length - 1] < xLabelStride) {
+        idxs[idxs.length - 1] = last
+      } else {
+        idxs.push(last)
+      }
+    }
+    return new Set(idxs)
+  })()
 
   function handleMove(e: React.MouseEvent<SVGSVGElement>) {
     const svg = ref.current
@@ -148,8 +163,8 @@ function LineChart({
       ))}
       {/* x 軸標籤 */}
       {points.map((p, i) => {
+        if (!xLabelIdxs.has(i)) return null
         const isLast = i === points.length - 1
-        if (!(i % xLabelStride === 0 || isLast)) return null
         const isFirst = i === 0
         return (
           <text

@@ -204,8 +204,11 @@ export async function GET(req: Request) {
         GROUP BY o.order_date
       `).all(from, to) as Array<{ bucket: string; orders_count: number; revenue: number }>
       const byDay = new Map(daily.map(r => [r.bucket, r]))
+      // 不要畫到未來日：custom 以外的 scope 截到今天為止；custom 尊重 user 輸入
+      const today = todayTW()
+      const effectiveTo = (scope === 'custom') ? to : (to > today ? today : to)
       let cursor = from
-      while (cursor <= to) {
+      while (cursor <= effectiveTo) {
         const row = byDay.get(cursor)
         timeseries.push({
           bucket: cursor,
