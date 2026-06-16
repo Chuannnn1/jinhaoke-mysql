@@ -100,12 +100,13 @@ export function setAdminSetting(key: string, value: string): void {
 }
 
 // ── 取得「目前生效」的密碼 hash ──
-// 優先讀 process.env.ADMIN_PASSWORD_HASH（prod 部署用 systemd EnvironmentFile 寫死的那個）；
-// 沒設的話從 admin_setting DB 讀（first-boot wizard 寫進去）。
+// 優先讀 admin_setting DB（first-boot wizard / GUI 改密碼寫進去的）；
+// 沒有再 fallback 到 process.env.ADMIN_PASSWORD_HASH（給「全新部署、env 帶 initial seed」用）。
+// 一旦 DB 有值，env 就被忽略 → 改密碼從 GUI 改即可（不用碰 systemd EnvironmentFile）。
 export function getStoredHash(): string | undefined {
-  const fromEnv = process.env.ADMIN_PASSWORD_HASH
-  if (fromEnv) return fromEnv
-  return getAdminSetting('admin_password_hash') ?? undefined
+  const fromDb = getAdminSetting('admin_password_hash')
+  if (fromDb) return fromDb
+  return process.env.ADMIN_PASSWORD_HASH || undefined
 }
 
 export function hasAdminPassword(): boolean {
