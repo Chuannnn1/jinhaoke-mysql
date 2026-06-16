@@ -12,7 +12,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import { getDb } from './db'
 
 export const COOKIE_NAME = 'jinhaoke_admin_session'
-export const SESSION_DAYS = 30
+export const SESSION_DAYS = 60
 
 // ── 密碼雜湊 / 驗證 ──
 //   stored 格式: scrypt:<salt-hex>:<hash-hex>

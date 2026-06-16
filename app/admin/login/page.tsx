@@ -136,8 +136,8 @@ function AdminLoginPageInner() {
         </h1>
         <p className="text-xs text-ink-mute mb-6">
           {isSetup
-            ? '這台機器是第一次啟動，請設定後台管理密碼。設完即自動登入，有效期 30 天。'
-            : '輸入管理密碼以進入後台。登入有效期 30 天。'}
+            ? '這台機器是第一次啟動，請設定後台管理密碼。設完即自動登入，有效期 60 天。'
+            : '輸入管理密碼以進入後台。登入有效期 60 天。'}
         </p>
 
         <form onSubmit={isSetup ? handleSetup : handleLogin} className="space-y-4">
@@ -179,11 +179,11 @@ function AdminLoginPageInner() {
           </button>
         </form>
 
-        <p className="text-[11px] text-ink-faint mt-6 leading-relaxed">
-          {isSetup
-            ? '密碼會用 scrypt 雜湊後寫入後端資料庫。設定後可用 scripts/set-admin-password.js 重設。'
-            : '這台後台只接受 Tailnet 內網訪問；如果你不是負責人，請關閉此頁面。'}
-        </p>
+        {isSetup && (
+          <p className="text-[11px] text-ink-faint mt-6 leading-relaxed">
+            密碼會用 scrypt 雜湊後寫入後端資料庫。設定後可至後台 sidebar「改密碼」重設。
+          </p>
+        )}
       </div>
     </main>
   )
