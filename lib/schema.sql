@@ -53,10 +53,14 @@ CREATE TABLE IF NOT EXISTS menu_item (
     emoji        TEXT    NOT NULL DEFAULT '',
     tag          TEXT    NOT NULL DEFAULT '其他',
     sub          TEXT    NOT NULL DEFAULT '',
-    option       TEXT    NOT NULL DEFAULT '',
+    option       TEXT    NOT NULL DEFAULT '',          -- 文案用，例「加肉60/加菜10」
     description  TEXT,
     is_active    INTEGER NOT NULL DEFAULT 1,
-    image_url    TEXT    NOT NULL DEFAULT ''
+    image_url    TEXT    NOT NULL DEFAULT '',
+    -- 客製化 addons 結構（JSON array）。空 array = 此品項不可客製。
+    -- 每個 addon: { id, label, price }
+    -- 例：[{"id":"extra_meat","label":"加排骨","price":70},{"id":"extra_rice","label":"加飯","price":10}]
+    addons       TEXT    NOT NULL DEFAULT '[]'
 );
 
 CREATE INDEX IF NOT EXISTS idx_menu_category ON menu_item(category);
@@ -118,6 +122,12 @@ CREATE TABLE IF NOT EXISTS order_item (
     item_id      INTEGER NOT NULL,
     quantity     INTEGER NOT NULL CHECK (quantity > 0),
     unit_price   INTEGER NOT NULL,               -- ★ 下單時的單價快照
+    -- 每份的客製化（JSON array，長度 = quantity）。
+    -- 每個元素是 addon id 陣列，例：[["extra_rice"], [], ["extra_meat","extra_rice"], []]
+    -- 空陣列 '[]' = 全部沒客製化（舊資料 / import 預設）
+    customizations TEXT  NOT NULL DEFAULT '[]',
+    -- 客製化加總金額（snapshot；省去 join 算 addon）
+    customizations_amount INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (order_id, item_id),
     FOREIGN KEY (order_id) REFERENCES "order"(order_id)
         ON UPDATE CASCADE ON DELETE CASCADE,

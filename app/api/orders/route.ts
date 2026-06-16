@@ -13,6 +13,15 @@ interface OrderRow {
   quantity: number | null
   item_name: string | null
   price: number | null
+  customizations: string | null            // JSON string
+  customizations_amount: number | null
+  menu_addons: string | null               // menu_item.addons JSON
+}
+
+interface AddonChoice {
+  id: string
+  label: string
+  price: number
 }
 
 interface OrderItem {
@@ -20,7 +29,10 @@ interface OrderItem {
   name: string
   quantity: number
   unit_price: number
-  subtotal: number
+  subtotal: number                         // (unit_price * qty) + customizations_amount
+  customizations: string[][]               // 每份的 addon id 列表
+  customizations_amount: number
+  customizations_detail?: AddonChoice[][]  // 對應 customizations，但帶 label / price
 }
 
 interface GroupedOrder {
@@ -47,6 +59,9 @@ export async function GET() {
         oi.quantity,
         mi.name AS item_name,
         oi.unit_price AS price,
+        oi.customizations,
+        oi.customizations_amount,
+        mi.addons AS menu_addons,
         dc.name AS customer_name
       FROM "order" o
       LEFT JOIN order_item oi ON o.order_id = oi.order_id
@@ -69,14 +84,36 @@ export async function GET() {
         }
       }
       if (row.item_id !== null && row.price !== null) {
+        // 解析 customizations + 對應到 menu addons 補 label / price
+        let customizations: string[][] = []
+        try {
+          const parsed = JSON.parse(row.customizations ?? '[]')
+          if (Array.isArray(parsed)) customizations = parsed
+        } catch { /* ignore malformed */ }
+        let menuAddons: AddonChoice[] = []
+        try {
+          const parsed = JSON.parse(row.menu_addons ?? '[]')
+          if (Array.isArray(parsed)) menuAddons = parsed
+        } catch { /* ignore */ }
+        const addonMap = new Map(menuAddons.map(a => [a.id, a]))
+        const detail: AddonChoice[][] = customizations.map(unit =>
+          (Array.isArray(unit) ? unit : [])
+            .map(id => addonMap.get(id))
+            .filter((a): a is AddonChoice => !!a)
+        )
+        const cAmount = row.customizations_amount ?? 0
+        const baseSubtotal = row.price * row.quantity!
         grouped[row.order_id].items.push({
           item_id: row.item_id,
           name: row.item_name!,
           quantity: row.quantity!,
           unit_price: row.price,
-          subtotal: row.price * row.quantity!,
+          subtotal: baseSubtotal + cAmount,
+          customizations,
+          customizations_amount: cAmount,
+          customizations_detail: detail.length > 0 ? detail : undefined,
         })
-        grouped[row.order_id].total += row.price * row.quantity!
+        grouped[row.order_id].total += baseSubtotal + cAmount
       }
     }
 
@@ -144,7 +181,7 @@ export async function POST(request: Request) {
     const compact = isoDate.replace(/-/g, '')              // '20260609'
     const prefix = `A${compact}`
 
-    const getMenuPrice = db.prepare('SELECT price FROM menu_item WHERE item_id = ?')
+    const getMenu = db.prepare('SELECT price, addons FROM menu_item WHERE item_id = ?')
 
     // 為避免外層作用域沒辦法取回 orderId，宣告 let 讓 transaction 內 assign
     let orderId = ''
@@ -179,9 +216,12 @@ export async function POST(request: Request) {
       // 3. 寫入訂單明細（用下單時的單價快照）
       //    - 防呆：item_id 缺漏 / 查不到 menu_item → throw，整個 transaction rollback
       //    - quantity 必須 > 0
+      //    - customizations 是 array of arrays（每份的 addon id 列表），長度 = quantity（沒給就 []）
+      //      只接受品項自己定義的 addon id，否則整單 reject（避免前端傳假 addon 偷免費 / 用別品項 addon）
+      //    - customizations_amount = sum of addon prices across all units
       const insertItem = db.prepare(`
-        INSERT INTO order_item (order_id, item_id, quantity, unit_price)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO order_item (order_id, item_id, quantity, unit_price, customizations, customizations_amount)
+        VALUES (?, ?, ?, ?, ?, ?)
       `)
       for (const item of items) {
         const itemId = item?.item_id
@@ -192,11 +232,49 @@ export async function POST(request: Request) {
         if (!Number.isFinite(quantity) || quantity <= 0) {
           throw new Error(`品項 ${itemId} 數量無效`)
         }
-        const menuItem = getMenuPrice.get(itemId) as { price: number } | undefined
+        const menuItem = getMenu.get(itemId) as { price: number; addons: string } | undefined
         if (!menuItem) {
           throw new Error(`找不到品項 ${itemId}`)
         }
-        insertItem.run(orderId, itemId, quantity, menuItem.price)
+
+        let menuAddons: { id: string; label: string; price: number }[] = []
+        try {
+          const parsed = JSON.parse(menuItem.addons ?? '[]')
+          if (Array.isArray(parsed)) menuAddons = parsed
+        } catch { /* 容錯：當作沒 addons */ }
+        const addonMap = new Map(menuAddons.map(a => [a.id, a]))
+
+        // 驗證 + 算金額
+        const rawCust = Array.isArray(item?.customizations) ? item.customizations : []
+        if (rawCust.length > 0 && rawCust.length !== quantity) {
+          throw new Error(`品項 ${itemId} customizations 長度 ${rawCust.length} 不等於 quantity ${quantity}`)
+        }
+        let cAmount = 0
+        const normalized: string[][] = rawCust.map((unit: unknown, idx: number) => {
+          if (!Array.isArray(unit)) {
+            throw new Error(`品項 ${itemId} 客製化第 ${idx + 1} 份格式錯誤`)
+          }
+          const ids: string[] = []
+          for (const a of unit) {
+            const addonId = String(a)
+            const addon = addonMap.get(addonId)
+            if (!addon) {
+              throw new Error(`品項 ${itemId} 不支援 addon: ${addonId}`)
+            }
+            ids.push(addonId)
+            cAmount += addon.price
+          }
+          return ids
+        })
+
+        insertItem.run(
+          orderId,
+          itemId,
+          quantity,
+          menuItem.price,
+          JSON.stringify(normalized),
+          cAmount
+        )
       }
     })()
 
@@ -211,7 +289,10 @@ export async function POST(request: Request) {
     const isClientError =
       msg.startsWith('找不到品項') ||
       msg.startsWith('品項缺少') ||
-      msg.includes('數量無效')
+      msg.includes('數量無效') ||
+      msg.includes('customizations') ||
+      msg.includes('客製化') ||
+      msg.includes('不支援 addon')
     return NextResponse.json(
       { success: false, error: msg },
       { status: isClientError ? 400 : 500 }

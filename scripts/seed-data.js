@@ -38,24 +38,40 @@ const INGREDIENTS = [
   ['菜脯',       40, 20, '份',   '包', 50, '糧油行'],
 ]
 
-// menu_item: { name, category, price, emoji, tag, sub, option, description, image_url }
+// menu_item: { name, category, price, emoji, tag, sub, option, description, image_url, addons }
 // item_id 由 AUTOINCREMENT 自動產生，recipe 透過 name → item_id 對應
 // image_url 對應 public/uploads/menu/ 底下的 webp
-const MENU_ITEMS = [
-  // 便當
-  { name: '大比目魚排便當',  category: '手作便當', price: 130, emoji: '🐟', tag: '魚',   sub: '扁鱈',         option: '',                description: '扁鱈魚排配三樣配菜',         image_url: '/uploads/menu/青甘魚排手作便當.webp' },
-  { name: '酥炸豬排便當',    category: '手作便當', price: 130, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '酥炸厚切豬排配三樣配菜',     image_url: '/uploads/menu/炸豬排手作便當.webp' },
-  { name: '酥嫩雞腿便當',    category: '手作便當', price: 130, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '酥嫩雞腿配三樣配菜',         image_url: '/uploads/menu/炸雞腿手作便當.webp' },
-  { name: '紅麴豬五花便當',  category: '手作便當', price: 120, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '紅麴豬五花配三樣配菜',       image_url: '/uploads/menu/紅麴豬手作便當.webp' },
-  { name: '酥炸排骨便當',    category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '無骨',         option: '',                description: '無骨酥炸排骨配三樣配菜',     image_url: '/uploads/menu/炸排骨手作便當.webp' },
-  { name: '滷豬腳便當',      category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '滷豬腳配三樣配菜',           image_url: '', is_active: 0 },
-  { name: '滷雞腿便當',      category: '手作便當', price: 100, emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '滷雞腿配三樣配菜',           image_url: '/uploads/menu/滷雞腿手作便當.webp' },
-  { name: '滷排骨便當',      category: '手作便當', price: 100, emoji: '🥚', tag: '豬',   sub: '帶骨·附滷蛋',  option: '',                description: '帶骨滷排骨附滷蛋配三樣配菜', image_url: '/uploads/menu/滷排骨手作便當.webp' },
+// addons：客製化選項（JSON）— 只有手作便當 1-8 + 燴飯 9-11 有，其他都空 []
+//   addon shape: { id: string, label: string, price: number }
+//   stable id：extra_meat / extra_veg / extra_rice（給 reports 用）；label 在不同品項可不同
+const ADDONS_BENTO_RICE = [
+  { id: 'extra_rice', label: '加飯', price: 10 },
+]
+const bentoAddons = (meatLabel, meatPrice) => ([
+  { id: 'extra_meat', label: meatLabel, price: meatPrice },
+  { id: 'extra_rice', label: '加飯', price: 10 },
+])
+const sauceAddons = (meatLabel, meatPrice) => ([
+  { id: 'extra_veg',  label: '加菜', price: 10 },
+  { id: 'extra_meat', label: meatLabel, price: meatPrice },
+  { id: 'extra_rice', label: '加飯', price: 10 },
+])
 
-  // 燴飯
-  { name: '沙茶牛肉燴飯',    category: '燴飯',     price: 110, emoji: '🥩', tag: '牛',   sub: '',             option: '加肉60 / 加菜10', description: '沙茶牛肉',                   image_url: '/uploads/menu/沙茶牛肉燴飯.webp' },
-  { name: '沙茶雞柳燴飯',    category: '燴飯',     price: 110, emoji: '🍗', tag: '雞',   sub: '',             option: '加肉60 / 加菜10', description: '沙茶雞柳',                   image_url: '/uploads/menu/沙茶雞柳燴飯.webp' },
-  { name: '沙茶豬肉燴飯',    category: '燴飯',     price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '加肉50 / 加菜10', description: '沙茶豬肉',                   image_url: '/uploads/menu/沙茶豬肉燴飯.webp' },
+const MENU_ITEMS = [
+  // 便當（加肉用對應單點價，加飯固定 10）
+  { name: '大比目魚排便當',  category: '手作便當', price: 130, emoji: '🐟', tag: '魚',   sub: '扁鱈',         option: '加魚排100 / 加飯10', description: '扁鱈魚排配三樣配菜',         image_url: '/uploads/menu/青甘魚排手作便當.webp',                addons: bentoAddons('加魚排',   100) },
+  { name: '酥炸豬排便當',    category: '手作便當', price: 130, emoji: '🐷', tag: '豬',   sub: '',             option: '加豬排100 / 加飯10', description: '酥炸厚切豬排配三樣配菜',     image_url: '/uploads/menu/炸豬排手作便當.webp',                  addons: bentoAddons('加豬排',   100) },
+  { name: '酥嫩雞腿便當',    category: '手作便當', price: 130, emoji: '🍗', tag: '雞',   sub: '',             option: '加雞腿100 / 加飯10', description: '酥嫩雞腿配三樣配菜',         image_url: '/uploads/menu/炸雞腿手作便當.webp',                  addons: bentoAddons('加雞腿',   100) },
+  { name: '紅麴豬五花便當',  category: '手作便當', price: 120, emoji: '🐷', tag: '豬',   sub: '',             option: '加豬五花90 / 加飯10', description: '紅麴豬五花配三樣配菜',       image_url: '/uploads/menu/紅麴豬手作便當.webp',                  addons: bentoAddons('加豬五花',  90) },
+  { name: '酥炸排骨便當',    category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '無骨',         option: '加排骨70 / 加飯10', description: '無骨酥炸排骨配三樣配菜',     image_url: '/uploads/menu/炸排骨手作便當.webp',                  addons: bentoAddons('加排骨',    70) },
+  { name: '滷豬腳便當',      category: '手作便當', price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '加飯10',          description: '滷豬腳配三樣配菜',           image_url: '', is_active: 0,                                       addons: ADDONS_BENTO_RICE },
+  { name: '滷雞腿便當',      category: '手作便當', price: 100, emoji: '🍗', tag: '雞',   sub: '',             option: '加滷雞腿70 / 加飯10', description: '滷雞腿配三樣配菜',           image_url: '/uploads/menu/滷雞腿手作便當.webp',                  addons: bentoAddons('加滷雞腿',  70) },
+  { name: '滷排骨便當',      category: '手作便當', price: 100, emoji: '🥚', tag: '豬',   sub: '帶骨·附滷蛋',  option: '加滷排骨80 / 加飯10', description: '帶骨滷排骨附滷蛋配三樣配菜', image_url: '/uploads/menu/滷排骨手作便當.webp',                  addons: bentoAddons('加滷排骨',  80) },
+
+  // 燴飯（加菜+10、加肉照原訂價、加飯+10）
+  { name: '沙茶牛肉燴飯',    category: '燴飯',     price: 110, emoji: '🥩', tag: '牛',   sub: '',             option: '加菜10 / 加牛60 / 加飯10', description: '沙茶牛肉', image_url: '/uploads/menu/沙茶牛肉燴飯.webp',  addons: sauceAddons('加牛', 60) },
+  { name: '沙茶雞柳燴飯',    category: '燴飯',     price: 110, emoji: '🍗', tag: '雞',   sub: '',             option: '加菜10 / 加雞60 / 加飯10', description: '沙茶雞柳', image_url: '/uploads/menu/沙茶雞柳燴飯.webp', addons: sauceAddons('加雞', 60) },
+  { name: '沙茶豬肉燴飯',    category: '燴飯',     price: 100, emoji: '🐷', tag: '豬',   sub: '',             option: '加菜10 / 加豬50 / 加飯10', description: '沙茶豬肉', image_url: '/uploads/menu/沙茶豬肉燴飯.webp', addons: sauceAddons('加豬', 50) },
 
   // 單點（統一用對應的 手作便當 / 燴飯 照片）
   { name: '大比目魚排',      category: '單點',     price: 100, emoji: '🐟', tag: '魚',   sub: '扁鱈',         option: '',                description: '扁鱈魚排',                   image_url: '/uploads/menu/青甘魚排手作便當.webp' },
@@ -180,26 +196,24 @@ function seedAll(db) {
 
     // 3) menu_item
     if (isEmpty(db, 'menu_item')) {
-      // 動態決定是否帶 image_url（舊 DB 可能還沒跑 migrate-add-menu-image）
-      const hasImageUrl = db.prepare("PRAGMA table_info(menu_item)").all().some(c => c.name === 'image_url')
-      const stmt = hasImageUrl
-        ? db.prepare(`
-            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description, image_url, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `)
-        : db.prepare(`
-            INSERT INTO menu_item (name, category, price, emoji, tag, sub, option, description, is_active)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `)
+      // 動態決定欄位（舊 DB 可能還沒跑對應 migrate）
+      const cols = db.prepare("PRAGMA table_info(menu_item)").all().map(c => c.name)
+      const hasImageUrl = cols.includes('image_url')
+      const hasAddons   = cols.includes('addons')
+      let sqlCols = 'name, category, price, emoji, tag, sub, option, description, is_active'
+      let sqlPlaceholders = '?, ?, ?, ?, ?, ?, ?, ?, ?'
+      if (hasImageUrl) { sqlCols += ', image_url'; sqlPlaceholders += ', ?' }
+      if (hasAddons)   { sqlCols += ', addons';    sqlPlaceholders += ', ?' }
+      const stmt = db.prepare(`INSERT INTO menu_item (${sqlCols}) VALUES (${sqlPlaceholders})`)
+
       for (const m of MENU_ITEMS) {
         const active = m.is_active === undefined ? 1 : m.is_active
-        if (hasImageUrl) {
-          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, m.image_url || '', active)
-        } else {
-          stmt.run(m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, active)
-        }
+        const args = [m.name, m.category, m.price, m.emoji, m.tag, m.sub, m.option, m.description, active]
+        if (hasImageUrl) args.push(m.image_url || '')
+        if (hasAddons)   args.push(JSON.stringify(m.addons ?? []))
+        stmt.run(...args)
       }
-      log(`menu_item : 寫入 ${MENU_ITEMS.length} 筆${hasImageUrl ? '（含 image_url）' : ''}`)
+      log(`menu_item : 寫入 ${MENU_ITEMS.length} 筆${hasImageUrl ? '（含 image_url）' : ''}${hasAddons ? '（含 addons）' : ''}`)
     } else {
       log('menu_item : 已有資料，跳過')
     }

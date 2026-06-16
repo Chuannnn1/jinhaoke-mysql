@@ -17,6 +17,11 @@ interface MenuItem {
   description: string
   is_active: number
   image_url: string
+  addons: { id: string; label: string; price: number }[]  // 解析後的
+}
+
+interface MenuItemRow extends Omit<MenuItem, 'addons'> {
+  addons: string  // DB 直接拿是 JSON 字串
 }
 
 interface CreateMenuBody {
@@ -70,13 +75,22 @@ export async function GET(req: Request) {
       : 'ORDER BY category, item_id'
 
     const sql = `
-      SELECT item_id, name, category, price, emoji, tag, sub, option, description, is_active, image_url
+      SELECT item_id, name, category, price, emoji, tag, sub, option, description, is_active, image_url, addons
       FROM menu_item
       ${whereClause}
       ${orderClause}
     `
 
-    const menu = db.prepare(sql).all(...params) as MenuItem[]
+    const rows = db.prepare(sql).all(...params) as MenuItemRow[]
+    const menu: MenuItem[] = rows.map(r => ({
+      ...r,
+      addons: (() => {
+        try {
+          const p = JSON.parse(r.addons ?? '[]')
+          return Array.isArray(p) ? p : []
+        } catch { return [] }
+      })(),
+    }))
     return NextResponse.json<ApiResponse<MenuItem[]>>({ success: true, data: menu })
   } catch (err) {
     console.error('[GET /api/menu]', err)
@@ -120,9 +134,18 @@ export async function POST(req: Request) {
       body.image_url ?? ''
     )
 
-    const newItem = db.prepare(
-      'SELECT item_id, name, category, price, emoji, tag, sub, option, description, is_active, image_url FROM menu_item WHERE item_id = ?'
-    ).get(result.lastInsertRowid) as MenuItem
+    const row = db.prepare(
+      'SELECT item_id, name, category, price, emoji, tag, sub, option, description, is_active, image_url, addons FROM menu_item WHERE item_id = ?'
+    ).get(result.lastInsertRowid) as MenuItemRow
+    const newItem: MenuItem = {
+      ...row,
+      addons: (() => {
+        try {
+          const p = JSON.parse(row.addons ?? '[]')
+          return Array.isArray(p) ? p : []
+        } catch { return [] }
+      })(),
+    }
 
     return NextResponse.json<ApiResponse<MenuItem>>(
       { success: true, data: newItem },
