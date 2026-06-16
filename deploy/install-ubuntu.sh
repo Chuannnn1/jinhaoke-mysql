@@ -12,6 +12,8 @@
 #   REPO_URL=…    自訂 git url（預設 https://github.com/Chuannnn1/jinhaoke.git）
 #   APP_PORT=…    Next.js 監聽 port（預設 3100，對齊 package.json）
 #   ADMIN_PW=…    非互動模式直接帶密碼（CI 用；互動模式會 prompt）
+#   TS_AUTHKEY=…  Tailscale auth key (tskey-…)；有設就自動連線，沒設則互動 URL
+#   TS_SKIP=1     完全跳過 tailscale up（之後手動跑）
 # ============================================================
 set -euo pipefail
 
@@ -180,11 +182,18 @@ systemctl daemon-reload
 systemctl enable jinhaoke.service
 systemctl restart jinhaoke.service
 
-# ── 9. Tailscale up（互動）──────────────────────────
+# ── 9. Tailscale up ─────────────────────────────────
 if ! tailscale status >/dev/null 2>&1; then
-  echo
-  log "啟動 Tailscale — 印出來的 URL 用瀏覽器/手機開來授權"
-  tailscale up --ssh --accept-routes
+  if [ "${TS_SKIP:-0}" = "1" ]; then
+    warn "TS_SKIP=1，跳過 tailscale up（稍後手動跑：sudo tailscale up --ssh --accept-routes [--authkey=tskey-…]）"
+  elif [ -n "${TS_AUTHKEY:-}" ]; then
+    log "用 TS_AUTHKEY 自動連線"
+    tailscale up --ssh --accept-routes --authkey="$TS_AUTHKEY"
+  else
+    echo
+    log "啟動 Tailscale — 印出來的 URL 用瀏覽器/手機開來授權"
+    tailscale up --ssh --accept-routes
+  fi
 fi
 
 # ── 10. 顯示完成資訊 ────────────────────────────────
