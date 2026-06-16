@@ -72,6 +72,17 @@ const MENU_ITEMS = [
   { name: '滷蛋',            category: '單點',     price: 15,  emoji: '🥚', tag: '其他', sub: '',             option: '',                description: '滷蛋',                       image_url: '/uploads/menu/單點 - 滷蛋.webp' },
   { name: '加購湯品',        category: '單點',     price: 10,  emoji: '🍜', tag: '其他', sub: '',             option: '',                description: '例湯',                       image_url: '/uploads/menu/單點 - 加購湯品.webp' },
   { name: '加購菜脯',        category: '單點',     price: 5,   emoji: '🥢', tag: '其他', sub: '原味/辣味',    option: '',                description: '原味/辣味',                  image_url: '/uploads/menu/單點  - 菜脯.webp' },
+
+  // ──────────────────────────────────────────
+  // 26+：加購 / 配對 沙茶燴 系列
+  //   POS code 26-31 對齊 CSV 匯入；統一放 單點 類別、上架，圖片沿用主菜 webp
+  // ──────────────────────────────────────────
+  { name: '沙茶燴雞肉',      category: '單點',     price: 90,  emoji: '🍗', tag: '雞',   sub: '',             option: '加肉60 / 加菜10', description: '沙茶燴雞肉',                 image_url: '/uploads/menu/沙茶雞柳燴飯.webp' },
+  { name: '加菜',            category: '單點',     price: 10,  emoji: '🥬', tag: '其他', sub: '',             option: '',                description: '燴飯加菜',                   image_url: '/uploads/menu/單點 - 季節時蔬.webp' },
+  { name: '加牛',            category: '單點',     price: 60,  emoji: '🥩', tag: '牛',   sub: '',             option: '',                description: '燴飯加牛',                   image_url: '/uploads/menu/沙茶牛肉燴飯.webp' },
+  { name: '加豬',            category: '單點',     price: 50,  emoji: '🐷', tag: '豬',   sub: '',             option: '',                description: '燴飯加豬',                   image_url: '/uploads/menu/沙茶豬肉燴飯.webp' },
+  { name: '加雞',            category: '單點',     price: 60,  emoji: '🍗', tag: '雞',   sub: '',             option: '',                description: '燴飯加雞',                   image_url: '/uploads/menu/沙茶雞柳燴飯.webp' },
+  { name: '加飯',            category: '單點',     price: 20,  emoji: '🍚', tag: '其他', sub: '',             option: '',                description: '加一份白飯',                 image_url: '/uploads/menu/單點 - 白飯.webp' },
 ]
 
 // recipe: [menu_name, ingredient_name, consume_qty]

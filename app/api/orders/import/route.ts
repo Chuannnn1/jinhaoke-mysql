@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 // POST /api/orders/import
 // 透過 multipart/form-data 上傳 CSV，預覽或匯入訂單
 //
-// 新版 CSV 格式（對齊店家實際匯出）：
+// CSV 格式（店家實際匯出）：
 //   檔名：MMDD.csv（例 0519.csv -> 2026-05-19）
 //   標頭：編號,金額,電話,付款狀態,品項,辣度
 //   品項：分號分隔 code，可選 *N 表數量（例：5;21、5*14;7*12）
@@ -14,6 +14,39 @@ import { NextResponse } from 'next/server'
 // 流程：
 //   1. preview 階段（confirm != '1'）回 unmapped_codes + menu_options，由 UI 補 mapping
 //   2. confirm 階段（confirm == '1'）需附 mapping JSON：{ [code: string]: item_id }
+//
+// ────────────────────────────────────────────────────────────
+// CSV 匯入「code → item_id」判斷原則（後續維護請對齊）
+// ────────────────────────────────────────────────────────────
+//   1. **預設 1:1 對應**：CSV `code = N` 直接對應 `menu_item.item_id = N`，
+//      包含已下架（is_active=0）品項，照樣會匯入歷史紀錄。
+//      這就是為什麼 menu_item 的 item_id 是「店家 POS 編號」，不要隨便重排。
+//
+//   2. **手動 mapping override**：preview 階段 UI 補的 mapping JSON 永遠優先，
+//      自動 1:1 只在缺漏時補。用來處理「code 暫時 reassign」之類的個案。
+//
+//   3. **未對應 code（unmapped）→ 跳過**：CSV 出現 menu_item 沒有的 code，
+//      preview 會列在 `unmapped_codes`、UI 顯示「已忽略 N 個未對應 code」，
+//      實際匯入時這些品項會被 filter 掉，不會阻擋整張訂單匯入。
+//      訂單若全是 unmapped 也會跳過該筆（itemsCount 不會計入）。
+//
+//   4. **想要新 code 被認識，請走這個 SOP**：
+//      a. 在 `scripts/seed-data.js` `MENU_ITEMS` 後面 append 新項目（item_id 自動接續）
+//      b. 寫一支 `scripts/migrate-add-XXX.js` migration 補進既有 DB（用 INSERT
+//         指定 item_id；idempotent；參考 `migrate-add-addon-menu.js`）
+//      c. 把 migration 串進 `package.json` 的 `db:migrate` script
+//      d. 在 `品項對照表.txt` 或 schema 文件補上對應，未來看 CSV 才知道含義
+//      e. 重 deploy 前一定要先跑 `npm run db:migrate`（VM 上是
+//         `sudo -u jinhaoke DB_PATH=/var/lib/jinhaoke/jinhaoke.db npm run db:migrate`）
+//
+//   5. **沒打算長期支援的 code**：保留 unmapped 流程即可（會自動跳過 + log），
+//      不要為了「不顯示警告」隨便塞假名稱進 menu_item。
+//
+//   6. **被 deactivate 的菜（is_active=0）**：仍然會被 import 認得（規則 1），
+//      只是 UI 顯示時會標 [已下架]。歷史訂單照常統計營收。
+//
+//   現行已加入的 26-31（沙茶燴雞肉 / 加菜 / 加牛 / 加豬 / 加雞 / 加飯）已對齊
+//   `品項對照表.txt` 2026-05-28 版本；CSV 內出現 27/28/29/31 都會正確 import。
 // ============================================================
 
 interface ParsedItem {
