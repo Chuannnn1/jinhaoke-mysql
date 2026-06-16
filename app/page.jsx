@@ -58,6 +58,8 @@ export default function CustomerOrderPage() {
   const [cart, setCart] = useState([])
   const [cartOpen, setCartOpen] = useState(false)
   const [customerNote, setCustomerNote] = useState('')
+  // 客製化 modal：null = 沒開；否則是該品項的 item_id
+  const [customizingItemId, setCustomizingItemId] = useState(null)
   const [orderDone, setOrderDone] = useState(false)
   const [justOrdered, setJustOrdered] = useState(null)
   // item_id → { blocked, max_servings }
@@ -98,9 +100,10 @@ export default function CustomerOrderPage() {
     setCart(prev => {
       const existing = prev.find(i => i.item_id === item.item_id)
       if (existing) {
+        // qty +1 → customizations 補一個空 unit
         return prev.map(i =>
           i.item_id === item.item_id
-            ? { ...i, quantity: i.quantity + 1 }
+            ? { ...i, quantity: i.quantity + 1, customizations: [...(i.customizations ?? []), []] }
             : i
         )
       }
@@ -115,6 +118,8 @@ export default function CustomerOrderPage() {
         category: item.category,
         tag: item.tag,
         quantity: 1,
+        addons: Array.isArray(item.addons) ? item.addons : [],  // menu 帶下來的可選 addon
+        customizations: [[]],                                   // 長度 = quantity；每份預設無 addon
       }]
     })
     setCartOpen(true)
@@ -128,13 +133,30 @@ export default function CustomerOrderPage() {
     setCart(prev => prev.map(i => {
       if (i.item_id === itemId) {
         const newQty = Math.max(0, i.quantity + delta)
-        return newQty === 0 ? null : { ...i, quantity: newQty }
+        if (newQty === 0) return null
+        const cur = i.customizations ?? []
+        // qty 變動同步 customizations 長度：增加補空、減少切尾
+        let next
+        if (newQty > cur.length) {
+          next = [...cur, ...Array.from({ length: newQty - cur.length }, () => [])]
+        } else {
+          next = cur.slice(0, newQty)
+        }
+        return { ...i, quantity: newQty, customizations: next }
       }
       return i
     }).filter(Boolean))
   }
 
-  const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  // 算每個 cart row 的客製化加總（依 menu_item.addons 對應 price）
+  const cartLineAddonAmount = (item) => {
+    const addonPriceMap = new Map((item.addons ?? []).map(a => [a.id, a.price]))
+    return (item.customizations ?? []).reduce((s, unit) =>
+      s + (Array.isArray(unit) ? unit.reduce((u, id) => u + (addonPriceMap.get(id) ?? 0), 0) : 0)
+    , 0)
+  }
+
+  const total = cart.reduce((sum, i) => sum + i.price * i.quantity + cartLineAddonAmount(i), 0)
 
   const handleSubmit = async () => {
     if (cart.length === 0) return alert('購物車是空的')
@@ -143,8 +165,12 @@ export default function CustomerOrderPage() {
       customer_name: '現場顧客',
       customer_phone: '',
       note: customerNote,
-      // POST 使用真實的 DB item_id
-      items: cart.map(i => ({ item_id: i.item_id, quantity: i.quantity })),
+      // POST 使用真實的 DB item_id；客製化以陣列形式帶上去（長度 = quantity）
+      items: cart.map(i => ({
+        item_id: i.item_id,
+        quantity: i.quantity,
+        customizations: i.customizations ?? [],
+      })),
     }
 
     try {
@@ -356,33 +382,62 @@ export default function CustomerOrderPage() {
               <p className="text-sm">尚未選取餐點</p>
             </div>
           ) : (
-            cart.map(item => (
-              <div key={item.item_id} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
-                <span className="text-xl shrink-0">{item.emoji || '🍱'}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-ink truncate">
-                    {item.name}
-                  </p>
-                  <p className="font-mono text-[13px] text-clay font-semibold">
-                    ${item.price}
-                  </p>
+            cart.map(item => {
+              const hasAddons = (item.addons ?? []).length > 0
+              const customizedCount = (item.customizations ?? []).filter(u => Array.isArray(u) && u.length > 0).length
+              const lineAddon = cartLineAddonAmount(item)
+              const lineSubtotal = item.price * item.quantity + lineAddon
+              return (
+                <div key={item.item_id} className="bg-gray-50 rounded-lg p-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl shrink-0">{item.emoji || '🍱'}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-ink truncate">
+                        {item.name}
+                      </p>
+                      <p className="font-mono text-[13px] text-clay font-semibold">
+                        ${lineSubtotal}
+                        {lineAddon > 0 && (
+                          <span className="text-[11px] text-ink-mute font-normal ml-1">
+                            ({item.price}×{item.quantity} + 客製 {lineAddon})
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => updateQuantity(item.item_id, -1)}
+                        className="w-6 h-6 rounded-full bg-white border border-border text-ink-mute hover:text-ink flex items-center justify-center text-xs">−</button>
+                      <span className="w-5 text-center font-mono text-sm font-medium text-ink">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => updateQuantity(item.item_id, 1)}
+                        className="w-6 h-6 rounded-full bg-ink text-white hover:bg-ink-soft flex items-center justify-center text-xs transition-colors">+</button>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(item.item_id)}
+                      className="text-ink-faint hover:text-red-500 text-sm ml-1 transition-colors">✕</button>
+                  </div>
+                  {hasAddons && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomizingItemId(item.item_id)}
+                      className="mt-2 w-full text-[12px] text-clay hover:text-clay-deep bg-white border border-clay/20 hover:border-clay/50 rounded-md py-1.5 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <span>客製化</span>
+                      {customizedCount > 0 ? (
+                        <span className="text-[11px] text-ink-mute">
+                          已客製 {customizedCount}/{item.quantity} 份
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-ink-faint">（可加肉 / 加菜 / 加飯）</span>
+                      )}
+                    </button>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => updateQuantity(item.item_id, -1)}
-                    className="w-6 h-6 rounded-full bg-white border border-border text-ink-mute hover:text-ink flex items-center justify-center text-xs">−</button>
-                  <span className="w-5 text-center font-mono text-sm font-medium text-ink">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => updateQuantity(item.item_id, 1)}
-                    className="w-6 h-6 rounded-full bg-ink text-white hover:bg-ink-soft flex items-center justify-center text-xs transition-colors">+</button>
-                </div>
-                <button
-                  onClick={() => removeFromCart(item.item_id)}
-                  className="text-ink-faint hover:text-red-500 text-sm ml-1 transition-colors">✕</button>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
 
@@ -434,6 +489,160 @@ export default function CustomerOrderPage() {
           </div>
         </div>
       )}
+
+      {/* ======== 客製化 modal ======== */}
+      {customizingItemId !== null && (() => {
+        const target = cart.find(i => i.item_id === customizingItemId)
+        if (!target) return null
+        return (
+          <CustomizationModal
+            item={target}
+            onClose={() => setCustomizingItemId(null)}
+            onSave={(newCustomizations) => {
+              setCart(prev => prev.map(i =>
+                i.item_id === customizingItemId
+                  ? { ...i, customizations: newCustomizations }
+                  : i
+              ))
+              setCustomizingItemId(null)
+            }}
+          />
+        )
+      })()}
+    </div>
+  )
+}
+
+// ============================================================
+// 客製化 modal — qty 份子項 + 套用到全部 + 即時總額預覽
+// ============================================================
+function CustomizationModal({ item, onClose, onSave }) {
+  const [units, setUnits] = useState(() => {
+    const existing = item.customizations ?? []
+    return Array.from({ length: item.quantity }, (_, i) =>
+      Array.isArray(existing[i]) ? [...existing[i]] : []
+    )
+  })
+
+  const addonMap = new Map((item.addons ?? []).map(a => [a.id, a]))
+
+  const toggleAddon = (unitIdx, addonId) => {
+    setUnits(prev => prev.map((u, i) => {
+      if (i !== unitIdx) return u
+      return u.includes(addonId) ? u.filter(a => a !== addonId) : [...u, addonId]
+    }))
+  }
+
+  const applyFirstToAll = () => {
+    const template = units[0] ?? []
+    setUnits(units.map(() => [...template]))
+  }
+
+  const clearAll = () => setUnits(units.map(() => []))
+
+  const totalAddon = units.reduce((sum, u) =>
+    sum + u.reduce((s, id) => s + (addonMap.get(id)?.price ?? 0), 0)
+  , 0)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[88vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* header */}
+        <div className="px-5 py-4 bg-clay-soft border-b border-clay/20 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">{item.emoji || '🍱'}</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-ink">{item.name}</p>
+              <p className="text-[11px] text-ink-mute">
+                共 {item.quantity} 份 · 基本 ${item.price * item.quantity}
+                {totalAddon > 0 && <span className="text-clay-deep font-medium ml-1">+ 客製 ${totalAddon}</span>}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 套用 / 清空 */}
+        {item.quantity > 1 && (
+          <div className="px-5 py-2 bg-cream border-b border-border-soft flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={applyFirstToAll}
+              className="text-[11px] px-2.5 py-1 rounded-md bg-white border border-border text-ink-mute hover:text-clay hover:border-clay/50"
+            >
+              套用第 1 份到全部
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-[11px] px-2.5 py-1 rounded-md bg-white border border-border text-ink-mute hover:text-red-500 hover:border-red-300"
+            >
+              全部清空
+            </button>
+          </div>
+        )}
+
+        {/* units */}
+        <div className="flex-1 overflow-y-auto">
+          {units.map((unit, idx) => (
+            <div
+              key={idx}
+              className={`px-5 py-3 ${idx > 0 ? 'border-t border-gray-200' : ''}`}
+            >
+              <div className="flex items-baseline gap-2 mb-2">
+                <span className="text-[11px] text-ink-mute uppercase tracking-wider">份 {idx + 1}</span>
+                {unit.length > 0 && (
+                  <span className="text-[11px] text-clay font-mono">
+                    +${unit.reduce((s, id) => s + (addonMap.get(id)?.price ?? 0), 0)}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(item.addons ?? []).map(addon => {
+                  const on = unit.includes(addon.id)
+                  return (
+                    <button
+                      key={addon.id}
+                      type="button"
+                      onClick={() => toggleAddon(idx, addon.id)}
+                      className={`px-3 py-1.5 rounded-md text-[12px] border transition-colors ${
+                        on
+                          ? 'bg-clay text-white border-clay'
+                          : 'bg-white text-ink-mute border-border hover:border-clay/50 hover:text-clay'
+                      }`}
+                    >
+                      {addon.label} <span className="font-mono">+${addon.price}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* footer */}
+        <div className="px-5 py-3 bg-gray-50 border-t border-border flex items-center justify-between shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-[12px] px-3 py-2 rounded-md border border-border text-ink-mute hover:text-ink hover:bg-white"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(units)}
+            className="flex-1 ml-2 text-sm font-semibold px-4 py-2 rounded-md bg-clay text-white hover:bg-clay-deep transition-colors"
+          >
+            完成（總計 ${item.price * item.quantity + totalAddon}）
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

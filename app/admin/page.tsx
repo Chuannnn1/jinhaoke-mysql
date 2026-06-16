@@ -753,27 +753,53 @@ export default function AdminOrderPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(detailOrder.items ?? []).map((it: any, i: number) => (
-                      <tr key={i} className="border-t border-gray-200">
-                        <td className="py-2 text-ink/85">
-                          {it.name ?? it.item_name ?? `?code${it.code}`}
-                          {it.spice && it.spice !== '無' && (
-                            <span className="ml-2 text-[11px] text-clay">辣度 {it.spice}</span>
-                          )}
-                        </td>
-                        <td className="py-2 text-right font-mono text-ink/60">
-                          {it.unit_price !== undefined ? `NT$ ${it.unit_price}` : '—'}
-                        </td>
-                        <td className="py-2 text-right font-mono">{it.quantity ?? it.qty ?? 1}</td>
-                        <td className="py-2 text-right font-mono text-ink">
-                          {it.subtotal !== undefined
-                            ? `NT$ ${it.subtotal}`
-                            : (it.unit_price !== undefined && it.qty !== undefined)
-                              ? `NT$ ${it.unit_price * it.qty}`
-                              : '—'}
-                        </td>
-                      </tr>
-                    ))}
+                    {(detailOrder.items ?? []).map((it: any, i: number) => {
+                      const detail: Array<Array<{ id: string; label: string; price: number }>> = it.customizations_detail ?? []
+                      const cAmount: number = it.customizations_amount ?? 0
+                      // 把 N 份的 addon 攤平統計：[{label, count, totalPrice}]
+                      const tally: Record<string, { label: string; count: number; price: number }> = {}
+                      for (const unit of detail) {
+                        for (const a of unit) {
+                          const k = a.label
+                          if (!tally[k]) tally[k] = { label: k, count: 0, price: a.price }
+                          tally[k].count++
+                        }
+                      }
+                      const chips = Object.values(tally)
+                      return (
+                        <tr key={i} className="border-t border-gray-200 align-top">
+                          <td className="py-2 text-ink/85">
+                            {it.name ?? it.item_name ?? `?code${it.code}`}
+                            {it.spice && it.spice !== '無' && (
+                              <span className="ml-2 text-[11px] text-clay">辣度 {it.spice}</span>
+                            )}
+                            {chips.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {chips.map(c => (
+                                  <span
+                                    key={c.label}
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-clay-soft text-clay-deep border border-clay/20 font-mono"
+                                  >
+                                    {c.label} ×{c.count} <span className="text-ink-mute">+{c.count * c.price}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-2 text-right font-mono text-ink/60">
+                            {it.unit_price !== undefined ? `NT$ ${it.unit_price}` : '—'}
+                          </td>
+                          <td className="py-2 text-right font-mono">{it.quantity ?? it.qty ?? 1}</td>
+                          <td className="py-2 text-right font-mono text-ink">
+                            {it.subtotal !== undefined
+                              ? `NT$ ${it.subtotal}`
+                              : (it.unit_price !== undefined && it.qty !== undefined)
+                                ? `NT$ ${it.unit_price * it.qty + cAmount}`
+                                : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
