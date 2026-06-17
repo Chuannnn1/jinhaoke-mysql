@@ -24,6 +24,8 @@ interface OverviewReport {
   summary: SummaryBlock
   timeseries: SeriesPoint[]
   top_items: TopItem[]
+  kpi_trend_revenue: number[]
+  kpi_trend_orders: number[]
 }
 interface InventoryItem { name: string; stock_qty: number; safety_stock: number; stock_unit: string }
 interface RecentOrder { order_id: string; status: string; created_at: string; total: number }
@@ -48,15 +50,41 @@ function fmtPct(n: number | null) {
   return `${s}%`
 }
 
+// ── KPI 卡 sparkline（最近 14 天 line，無 axis、無 label） ──
+function Sparkline({ data, color }: { data: number[]; color: string }) {
+  const W = 80, H = 24
+  if (data.length === 0) return null
+  const max = Math.max(1, ...data)
+  const pts = data.map((v, i) => {
+    const x = data.length === 1 ? W / 2 : (i / (data.length - 1)) * W
+    const y = H - (v / max) * (H - 2) - 1
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block">
+      <polyline
+        fill="none"
+        stroke={color}
+        strokeOpacity={0.55}
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        points={pts}
+      />
+    </svg>
+  )
+}
+
 // ── KPI 卡片 ──
 function KpiCard({
-  label, value, sub, accent, changePct,
+  label, value, sub, accent, changePct, trend,
 }: {
-  label: string; value: string; sub?: string; accent: string; changePct?: number | null
+  label: string; value: string; sub?: string; accent: string;
+  changePct?: number | null; trend?: number[]
 }) {
   const positive = (changePct ?? 0) >= 0
   return (
-    <div className="bg-paper rounded-2xl shadow-sm p-7 h-full border border-border/40">
+    <div className="bg-paper rounded-2xl shadow-sm p-7 h-full border border-border/40 relative overflow-hidden">
       <p className="text-xs text-ink-mute uppercase tracking-wider mb-3">{label}</p>
       <p className="text-4xl font-bold font-mono tracking-tight" style={{ color: accent }}>
         {value}
@@ -72,14 +100,41 @@ function KpiCard({
           }
         </p>
       )}
+      {trend && trend.length > 0 && (
+        <div className="absolute right-4 bottom-4 pointer-events-none" title="近 14 天">
+          <Sparkline data={trend} color={accent} />
+        </div>
+      )}
     </div>
   )
 }
 
+// ── 7 日移動平均（前 6 天用 partial、第 7 天起 full window）──
+// 注意：只有 revenue > 0 的點才納入平均；公休（revenue===0）視為斷點不計入也不出 MA 值
+function computeMovingAvg(data: SeriesPoint[], window = 7): Array<number | null> {
+  const out: Array<number | null> = []
+  for (let i = 0; i < data.length; i++) {
+    // 公休日不畫 MA
+    if (data[i].revenue === 0) { out.push(null); continue }
+    const start = Math.max(0, i - window + 1)
+    const slice = data.slice(start, i + 1).filter(d => d.revenue > 0)
+    if (slice.length === 0) { out.push(null); continue }
+    const avg = slice.reduce((s, d) => s + d.revenue, 0) / slice.length
+    out.push(avg)
+  }
+  return out
+}
+
 // ── 折線圖（多日 revenue）──
+// showMovingAvg：8 天以上才開；公休（revenue===0 連續一天以上）會：
+//   1) 主折線斷開（不硬連）
+//   2) 該日背景畫灰塊 + 上方寫「公休」
 function LineChart({
-  data, stroke, height = 220,
-}: { data: SeriesPoint[]; stroke: string; height?: number }) {
+  data, stroke, height = 220, showMovingAvg = false, granularity = 'day',
+}: {
+  data: SeriesPoint[]; stroke: string; height?: number;
+  showMovingAvg?: boolean; granularity?: 'day' | 'week'
+}) {
   const ref = useRef<SVGSVGElement>(null)
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null)
   const padding = { top: 20, right: 24, bottom: 28, left: 56 }
@@ -98,7 +153,70 @@ function LineChart({
     const y = padding.top + innerH - (d.revenue / maxRev) * innerH
     return { x, y, d, i }
   })
-  const polyline = points.map(p => `${p.x},${p.y}`).join(' ')
+
+  // 主折線：以 revenue === 0 為斷點切成多段（每段 ≥2 點才畫）
+  // 週視圖時不做斷線（週彙總 0 通常代表整週公休，直接照畫即可）
+  const segments: Array<{ x: number; y: number }[]> = []
+  if (granularity === 'day') {
+    let cur: { x: number; y: number }[] = []
+    for (const p of points) {
+      if (p.d.revenue === 0) {
+        if (cur.length) { segments.push(cur); cur = [] }
+      } else {
+        cur.push({ x: p.x, y: p.y })
+      }
+    }
+    if (cur.length) segments.push(cur)
+  } else {
+    segments.push(points.map(p => ({ x: p.x, y: p.y })))
+  }
+
+  // 公休灰塊：找出 revenue===0 的連續區間，畫成淡灰背景 + 「公休」label
+  // 只對日視圖做
+  const closedBlocks: Array<{ x1: number; x2: number; midX: number }> = []
+  if (granularity === 'day') {
+    const step = data.length > 1 ? innerW / (data.length - 1) : innerW
+    let runStart = -1
+    for (let i = 0; i <= points.length; i++) {
+      const isZero = i < points.length && data[i].revenue === 0
+      if (isZero && runStart === -1) runStart = i
+      if ((!isZero || i === points.length) && runStart !== -1) {
+        const a = points[runStart].x - step / 2
+        const b = points[i - 1].x + step / 2
+        closedBlocks.push({
+          x1: Math.max(padding.left, a),
+          x2: Math.min(padding.left + innerW, b),
+          midX: (points[runStart].x + points[i - 1].x) / 2,
+        })
+        runStart = -1
+      }
+    }
+  }
+
+  // 移動平均：再畫一條疊在上方
+  const maRaw = showMovingAvg ? computeMovingAvg(data, 7) : []
+  const maPoints = showMovingAvg
+    ? maRaw.map((v, i) => {
+        if (v === null) return null
+        return {
+          x: points[i].x,
+          y: padding.top + innerH - (v / maxRev) * innerH,
+        }
+      })
+    : []
+  // MA 也以 null 為斷點切段
+  const maSegments: Array<{ x: number; y: number }[]> = []
+  {
+    let cur: { x: number; y: number }[] = []
+    for (const p of maPoints) {
+      if (p === null) {
+        if (cur.length) { maSegments.push(cur); cur = [] }
+      } else {
+        cur.push(p)
+      }
+    }
+    if (cur.length) maSegments.push(cur)
+  }
 
   // x 軸標籤：太多時跳著顯示；最後一筆若太靠近前一筆 stride 點就 replace（避免重疊）
   const xLabelStride = Math.max(1, Math.floor(data.length / 10))
@@ -133,6 +251,10 @@ function LineChart({
     setHover({ i: best, x: points[best].x, y: points[best].y })
   }
 
+  // 主折線樣式：有 MA 時主線變細變淡
+  const mainStrokeW = showMovingAvg ? 1.5 : 2.5
+  const mainOpacity = showMovingAvg ? 0.7 : 1
+
   return (
     <svg
       ref={ref}
@@ -141,6 +263,28 @@ function LineChart({
       onMouseMove={handleMove}
       onMouseLeave={() => setHover(null)}
     >
+      {/* 公休灰塊（畫在最底層）*/}
+      {closedBlocks.map((b, i) => (
+        <g key={`closed-${i}`}>
+          <rect
+            x={b.x1}
+            y={padding.top}
+            width={Math.max(0, b.x2 - b.x1)}
+            height={innerH}
+            fill="#F0EBE3"
+            opacity={0.4}
+          />
+          <text
+            x={b.midX}
+            y={padding.top + 12}
+            fontSize="9"
+            fill="#B0A89A"
+            textAnchor="middle"
+          >
+            公休
+          </text>
+        </g>
+      ))}
       {/* y 格線 + 標籤 */}
       {yLines.map((v, i) => {
         const y = padding.top + innerH - (v / maxRev) * innerH
@@ -154,12 +298,36 @@ function LineChart({
           </g>
         )
       })}
-      {/* 折線 */}
-      <polyline fill="none" stroke={stroke} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round"
-        points={polyline} />
-      {/* 端點 */}
+      {/* 主折線（分段，遇公休斷開）*/}
+      {segments.map((seg, i) => (
+        <polyline
+          key={`seg-${i}`}
+          fill="none"
+          stroke={stroke}
+          strokeOpacity={mainOpacity}
+          strokeWidth={mainStrokeW}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          points={seg.map(p => `${p.x},${p.y}`).join(' ')}
+        />
+      ))}
+      {/* 端點（只在有營收的點）*/}
       {points.map((p, i) => (
-        <circle key={i} cx={p.x} cy={p.y} r={3} fill={stroke} />
+        p.d.revenue > 0
+          ? <circle key={i} cx={p.x} cy={p.y} r={showMovingAvg ? 2 : 3} fill={stroke} opacity={mainOpacity} />
+          : null
+      ))}
+      {/* 7 日移動平均 overlay */}
+      {showMovingAvg && maSegments.map((seg, i) => (
+        <polyline
+          key={`ma-${i}`}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={2.5}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          points={seg.map(p => `${p.x},${p.y}`).join(' ')}
+        />
       ))}
       {/* x 軸標籤 */}
       {points.map((p, i) => {
@@ -183,19 +351,23 @@ function LineChart({
       {hover && (() => {
         const tipW = 132
         const tipPad = 10
-        // 若往右畫會超出 innerW，改畫在左側
         const flipLeft = hover.x + tipPad + tipW > padding.left + innerW
         const rectX = flipLeft ? hover.x - tipPad - tipW : hover.x + tipPad
         const textX = flipLeft ? hover.x - tipPad - tipW + 8 : hover.x + 18
+        const hd = data[hover.i]
+        const isClosed = granularity === 'day' && hd.revenue === 0
         return (
           <g>
             <line x1={hover.x} x2={hover.x} y1={padding.top} y2={padding.top + innerH}
               stroke={stroke} strokeOpacity={0.3} strokeDasharray="3 4" />
-            <circle cx={hover.x} cy={hover.y} r={5} fill={stroke} />
+            {!isClosed && <circle cx={hover.x} cy={hover.y} r={5} fill={stroke} />}
             <rect x={rectX} y={hover.y - 36} width={tipW} height={42} rx={6} fill="#1A1A1A" />
-            <text x={textX} y={hover.y - 20} fontSize="10" fill="#bbb">{data[hover.i].bucket}</text>
+            <text x={textX} y={hover.y - 20} fontSize="10" fill="#bbb">{hd.bucket}</text>
             <text x={textX} y={hover.y - 6} fontSize="12" fill="white">
-              NT$ {fmtMoney(data[hover.i].revenue)} · {data[hover.i].orders_count} 筆
+              {isClosed
+                ? '公休'
+                : `NT$ ${fmtMoney(hd.revenue)} · ${hd.orders_count} 筆`
+              }
             </text>
           </g>
         )
@@ -268,6 +440,57 @@ function TopRanking({ items, accent }: { items: TopItem[]; accent: string }) {
           </span>
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── 將日 series 彙總成週（週起始日 = 週日）──
+// week 視圖時用；bucket = 該週週日的 YYYY-MM-DD
+function aggregateToWeek(data: SeriesPoint[]): SeriesPoint[] {
+  if (data.length === 0) return []
+  // 找週日：用 UTC date 算 day-of-week，往前推到週日
+  function weekStart(ymd: string): string {
+    const d = new Date(ymd + 'T00:00:00Z')
+    const dow = d.getUTCDay() // 0=Sun
+    d.setUTCDate(d.getUTCDate() - dow)
+    return d.toISOString().slice(0, 10)
+  }
+  const buckets = new Map<string, { revenue: number; orders_count: number }>()
+  for (const p of data) {
+    const k = weekStart(p.bucket)
+    const cur = buckets.get(k) ?? { revenue: 0, orders_count: 0 }
+    cur.revenue += p.revenue
+    cur.orders_count += p.orders_count
+    buckets.set(k, cur)
+  }
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([bucket, v]) => ({ bucket, revenue: v.revenue, orders_count: v.orders_count }))
+}
+
+// ── 粒度切換器（日 / 週）──
+type Granularity = 'day' | 'week'
+function GranularityPills({
+  value, onChange, accent,
+}: { value: Granularity; onChange: (g: Granularity) => void; accent: string }) {
+  return (
+    <div className="inline-flex bg-cream rounded-full p-0.5 border border-border/40 text-xs">
+      {(['day', 'week'] as Granularity[]).map(g => {
+        const active = g === value
+        return (
+          <button
+            key={g}
+            onClick={() => onChange(g)}
+            className="px-3 py-0.5 rounded-full font-medium transition-colors"
+            style={active
+              ? { backgroundColor: accent, color: 'white' }
+              : { color: '#888' }
+            }
+          >
+            {g === 'day' ? '日' : '週'}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -347,6 +570,25 @@ export default function DashboardPage() {
   const summary = overview?.summary
   const isHourly = scope === 'today'
 
+  // ── 粒度自動 / 手動切換 ──
+  // 規則：scope 改變時重設使用者選擇；series 長度 60+ 預設週、其它預設日；使用者手動覆蓋時 sticky
+  const seriesLen = overview?.timeseries.length ?? 0
+  const autoGranularity: Granularity = seriesLen > 60 ? 'week' : 'day'
+  const [userGranularity, setUserGranularity] = useState<Granularity | null>(null)
+  useEffect(() => { setUserGranularity(null) }, [scope, appliedFrom, appliedTo])
+  const granularity: Granularity = userGranularity ?? autoGranularity
+  const showGranularityPills = !isHourly && seriesLen >= 8
+  // 8-60 天：開啟 7 日移動平均；其它（≤7 或週視圖）關閉
+  const showMovingAvg = !isHourly && granularity === 'day' && seriesLen >= 8 && seriesLen <= 90
+
+  const chartSeries = useMemo<SeriesPoint[]>(() => {
+    if (!overview) return []
+    if (isHourly) return overview.timeseries
+    return granularity === 'week'
+      ? aggregateToWeek(overview.timeseries)
+      : overview.timeseries
+  }, [overview, granularity, isHourly])
+
   return (
     <>
       <header className="h-16 bg-paper border-b border-border flex items-center justify-between px-8 shrink-0">
@@ -400,6 +642,7 @@ export default function DashboardPage() {
                 sub={`vs ${summary.prev_label} NT$ ${fmtMoney(summary.prev_revenue)}`}
                 accent={theme.hex}
                 changePct={summary.change_pct}
+                trend={overview!.kpi_trend_revenue}
               />
             </div>
             <div className="col-span-3">
@@ -408,6 +651,7 @@ export default function DashboardPage() {
                 value={String(summary.orders_count)}
                 sub={`期間 ${overview!.range.from} → ${overview!.range.to}`}
                 accent={theme.hex}
+                trend={overview!.kpi_trend_orders}
               />
             </div>
             <div className="col-span-3">
@@ -431,19 +675,40 @@ export default function DashboardPage() {
             <div className="col-span-12">
               <div className="bg-paper rounded-2xl shadow-sm p-7 border border-border/40">
                 <div className="flex items-baseline justify-between mb-4">
-                  <p className="text-xs text-ink-mute uppercase tracking-wider">
-                    {isHourly ? '今日各時段營收' : '期間日營收趨勢'}
-                  </p>
-                  <p className="text-xs text-ink-faint font-mono">
-                    {overview!.range.from}{overview!.range.from !== overview!.range.to ? ` → ${overview!.range.to}` : ''}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-xs text-ink-mute uppercase tracking-wider">
+                      {isHourly
+                        ? '今日各時段營收'
+                        : granularity === 'week' ? '期間週營收趨勢' : '期間日營收趨勢'}
+                    </p>
+                    {showMovingAvg && (
+                      <span className="text-[10px] text-ink-faint font-mono">＋7 日移動平均</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {showGranularityPills && (
+                      <GranularityPills
+                        value={granularity}
+                        onChange={setUserGranularity}
+                        accent={theme.hex}
+                      />
+                    )}
+                    <p className="text-xs text-ink-faint font-mono">
+                      {overview!.range.from}{overview!.range.from !== overview!.range.to ? ` → ${overview!.range.to}` : ''}
+                    </p>
+                  </div>
                 </div>
                 {overview!.timeseries.every(p => p.revenue === 0) ? (
                   <p className="text-ink-faint text-sm py-12 text-center">期間內無已完成訂單</p>
                 ) : isHourly ? (
                   <BarChart24 data={overview!.timeseries} fill={theme.hex} />
                 ) : (
-                  <LineChart data={overview!.timeseries} stroke={theme.hex} />
+                  <LineChart
+                    data={chartSeries}
+                    stroke={theme.hex}
+                    showMovingAvg={showMovingAvg}
+                    granularity={granularity}
+                  />
                 )}
               </div>
             </div>

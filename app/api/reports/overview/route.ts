@@ -44,6 +44,9 @@ interface OverviewReport {
   summary: SummaryBlock
   timeseries: SeriesPoint[]
   top_items: TopItem[]
+  // KPI 卡片 sparkline：固定回最近 14 天（含當天回推 13 天）
+  kpi_trend_revenue: number[]
+  kpi_trend_orders: number[]
 }
 
 interface ApiResponse<T = unknown> {
@@ -241,12 +244,38 @@ export async function GET(req: Request) {
       revenue: Math.round(r.revenue),
     }))
 
+    // ── KPI sparkline：最近 14 天日營收與訂單數（含今天回推 13 天） ─────
+    const sparkTo = todayTW()
+    const sparkFrom = addDays(sparkTo, -13)
+    const sparkRows = db.prepare(`
+      SELECT
+        o.order_date                                  AS bucket,
+        COUNT(DISTINCT o.order_id)                    AS orders_count,
+        COALESCE(SUM(oi.unit_price * oi.quantity), 0) AS revenue
+      FROM "order" o
+      LEFT JOIN order_item oi ON o.order_id = oi.order_id
+      WHERE o.order_date BETWEEN ? AND ? AND o.status = '已完成'
+      GROUP BY o.order_date
+    `).all(sparkFrom, sparkTo) as Array<{ bucket: string; orders_count: number; revenue: number }>
+    const sparkMap = new Map(sparkRows.map(r => [r.bucket, r]))
+    const kpi_trend_revenue: number[] = []
+    const kpi_trend_orders: number[] = []
+    let sparkCursor = sparkFrom
+    while (sparkCursor <= sparkTo) {
+      const row = sparkMap.get(sparkCursor)
+      kpi_trend_revenue.push(row ? Math.round(row.revenue) : 0)
+      kpi_trend_orders.push(row ? row.orders_count : 0)
+      sparkCursor = addDays(sparkCursor, 1)
+    }
+
     const report: OverviewReport = {
       scope,
       range: { from, to },
       summary,
       timeseries,
       top_items,
+      kpi_trend_revenue,
+      kpi_trend_orders,
     }
 
     return NextResponse.json<ApiResponse<OverviewReport>>({ success: true, data: report }, { status: 200 })
