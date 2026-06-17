@@ -16,8 +16,8 @@ const LEGACY_CATEGORY_MAP = {
 const normalizeCategory = (c) => LEGACY_CATEGORY_MAP[c] ?? c
 
 // 前台不顯示：純 addon 用途，只在便當 / 燴飯客製化 modal 出現
-//   28 加牛 / 29 加豬 / 30 加雞
-const FRONT_HIDDEN_ITEM_IDS = new Set([28, 29, 30])
+//   27 加菜 / 28 加牛 / 29 加豬 / 30 加雞 / 31 加飯
+const FRONT_HIDDEN_ITEM_IDS = new Set([27, 28, 29, 30, 31])
 
 // 單點分類自訂排序：26 沙茶燴雞肉視為 18.5，插在 18 沙茶燴豬肉後面，
 // 讓沙茶牛 / 豬 / 雞排在一起。其它品項仍維持 item_id 順序。
@@ -65,6 +65,8 @@ export default function CustomerOrderPage() {
   const [activeTag, setActiveTag] = useState('全部')
   const [cart, setCart] = useState([])
   const [cartOpen, setCartOpen] = useState(false)
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
   const [customerNote, setCustomerNote] = useState('')
   // 客製化 modal：null = 沒開；否則是該品項的 item_id
   const [customizingItemId, setCustomizingItemId] = useState(null)
@@ -172,8 +174,9 @@ export default function CustomerOrderPage() {
     if (cart.length === 0) return alert('購物車是空的')
 
     const payload = {
-      customer_name: '現場顧客',
-      customer_phone: '',
+      // 兩個都選填，使用者沒填就送空字串，後端會自動補 phone 佔位、name 預設「現場顧客」
+      customer_name: customerName,
+      customer_phone: customerPhone,
       note: customerNote,
       // POST 使用真實的 DB item_id；客製化以陣列形式帶上去（長度 = quantity）
       items: cart.map(i => ({
@@ -201,6 +204,8 @@ export default function CustomerOrderPage() {
 
       setTimeout(() => {
         setCart([])
+        setCustomerName('')
+        setCustomerPhone('')
         setCustomerNote('')
         setOrderDone(false)
         setCartOpen(false)
@@ -467,6 +472,23 @@ export default function CustomerOrderPage() {
 
         {/* Cart Footer */}
         <div className="border-t border-border bg-gray-50 px-6 py-4 shrink-0">
+          <div className="flex gap-2 mb-2">
+            <input
+              type="text"
+              placeholder="姓名（選填）"
+              value={customerName}
+              onChange={e => setCustomerName(e.target.value)}
+              className="flex-1 bg-white border border-border rounded-md px-3 py-2 text-[13px] text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-clay"
+            />
+            <input
+              type="tel"
+              inputMode="tel"
+              placeholder="電話（選填）"
+              value={customerPhone}
+              onChange={e => setCustomerPhone(e.target.value)}
+              className="w-32 bg-white border border-border rounded-md px-3 py-2 text-[13px] text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-clay font-mono"
+            />
+          </div>
           <textarea
             placeholder="備註：外帶、不要辣…"
             value={customerNote}

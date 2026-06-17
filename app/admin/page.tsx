@@ -630,9 +630,6 @@ export default function AdminOrderPage() {
                             </tbody>
                           </table>
                         </div>
-                        <p className="text-[11px] text-ink/40 mt-2">
-                          辣度資訊僅供預覽，不會寫入資料庫（schema 無 note 欄位）。
-                        </p>
                       </div>
                     )}
 

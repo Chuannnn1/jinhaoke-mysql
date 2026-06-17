@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS "order" (
     status         TEXT    NOT NULL DEFAULT '待製作'
                    CHECK (status IN ('待製作','製作中','待付款','已完成','已取消')),
     customer_phone TEXT,                          -- 內用可 NULL
+    note           TEXT,                          -- 備註：辣度 / 顧客備註，import 時保留
     FOREIGN KEY (customer_phone) REFERENCES delivery_customer(phone)
         ON UPDATE CASCADE ON DELETE SET NULL
 );

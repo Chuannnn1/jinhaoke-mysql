@@ -506,6 +506,13 @@ export default function MenuPage() {
               </button>
             </div>
 
+            {/* 包成 form：所有單行 input 按 Enter 即可送出儲存；textarea 保持換行行為 */}
+            <form
+              onSubmit={e => {
+                e.preventDefault()
+                if (!submitting) handleSubmit()
+              }}
+            >
             <div className="px-6 py-5 space-y-4 max-h-[65vh] overflow-y-auto">
               {/* image upload */}
               <div>
@@ -634,19 +641,21 @@ export default function MenuPage() {
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
+                type="button"
                 onClick={closeModal}
                 className="px-4 py-2 text-sm text-ink/50 hover:text-ink transition-colors"
               >
                 取消
               </button>
               <button
-                onClick={handleSubmit}
+                type="submit"
                 disabled={submitting}
                 className="px-5 py-2 bg-gray-500 text-white text-sm rounded-lg hover:bg-clay-deep transition-colors font-medium disabled:opacity-50"
               >
                 {submitting ? '儲存中…' : '儲存'}
               </button>
             </div>
+            </form>
           </div>
         </div>
       )}

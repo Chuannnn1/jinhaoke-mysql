@@ -404,8 +404,8 @@ export async function POST(request: Request) {
     }
 
     const insertOrder = db.prepare(`
-      INSERT INTO "order" (order_id, order_date, created_at, updated_at, status, customer_phone)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO "order" (order_id, order_date, created_at, updated_at, status, customer_phone, note)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
     const insertItem = db.prepare(`
       INSERT INTO order_item (order_id, item_id, quantity, unit_price)
@@ -428,7 +428,8 @@ export async function POST(request: Request) {
           fallbackTime,
           fallbackTime,
           order.status,
-          phoneOrNull
+          phoneOrNull,
+          order.note || null
         )
         // 同 order_id + item_id 為 PK，需聚合同一 item_id 的 qty
         const agg = new Map<number, { qty: number; unit_price: number }>()

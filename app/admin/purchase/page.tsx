@@ -604,7 +604,7 @@ function CreatePOModal({
               })}
             </div>
             <p className="text-[11px] text-ink/30 mt-2">
-              訂購量以食材的 stock_unit 計；預估成本可留空，驗貨後再補。
+              訂購量以食材的庫存單位（片 / 隻 / kg 等）計；預估成本可留空，驗貨後再補。
             </p>
           </div>
 

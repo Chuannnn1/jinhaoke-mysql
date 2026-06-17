@@ -9,6 +9,7 @@ interface OrderRow {
   order_id: string
   status: string
   created_at: string
+  note: string | null
   item_id: number | null
   quantity: number | null
   item_name: string | null
@@ -38,8 +39,10 @@ interface OrderItem {
 interface GroupedOrder {
   order_id: string
   customer_name: string
+  customer_phone: string | null
   status: string
   created_at: string
+  note: string | null
   items: OrderItem[]
   total: number
 }
@@ -55,6 +58,8 @@ export async function GET() {
         o.order_id,
         o.status,
         o.created_at,
+        o.note,
+        o.customer_phone,
         oi.item_id,
         oi.quantity,
         mi.name AS item_name,
@@ -68,7 +73,7 @@ export async function GET() {
       LEFT JOIN menu_item mi ON oi.item_id = mi.item_id
       LEFT JOIN delivery_customer dc ON o.customer_phone = dc.phone
       ORDER BY o.created_at DESC
-    `).all() as (OrderRow & { customer_name: string | null })[]
+    `).all() as (OrderRow & { customer_name: string | null; customer_phone: string | null })[]
 
     // 將扁平的 join 結果整理成巢狀結構
     const grouped: Record<string, GroupedOrder> = {}
@@ -77,8 +82,10 @@ export async function GET() {
         grouped[row.order_id] = {
           order_id: row.order_id,
           customer_name: row.customer_name ?? '內用顧客',
+          customer_phone: row.customer_phone ?? null,
           status: row.status,
           created_at: row.created_at,
+          note: row.note ?? null,
           items: [],
           total: 0,
         }
@@ -140,15 +147,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { customer_name, customer_phone, items } = body
+    const { customer_name, customer_phone, note, items } = body
 
-    // 驗證必填
-    if (!customer_name?.trim()) {
-      return NextResponse.json(
-        { success: false, error: '請輸入顧客姓名' },
-        { status: 400 }
-      )
-    }
+    // 姓名與電話皆為「選填」：店家實務上通常只記電話，不一定要姓名
+    // 兩個都沒給也可以下單（無頭內用單）
+    const nameTrim = (typeof customer_name === 'string' ? customer_name : '').trim()
+    const phoneTrim = (typeof customer_phone === 'string' ? customer_phone : '').trim()
+    const noteTrim = (typeof note === 'string' ? note : '').trim()
+
     if (!items || items.length === 0) {
       return NextResponse.json(
         { success: false, error: '購物車是空的' },
@@ -198,20 +204,23 @@ export async function POST(request: Request) {
       const nextSeq = last ? parseInt(last.order_id.slice(-4), 10) + 1 : 1
       orderId = `${prefix}${String(nextSeq).padStart(4, '0')}`
 
-      // 電話處理：內用沒電話 → 產暫時電話
-      phone = customer_phone?.trim() || `09${orderId.slice(-8)}`
+      // 電話 / 姓名都選填：實務上只記電話居多，兩者都可缺
+      // 沒電話 → 產暫時電話佔位（給 FK 與外送顧客單一致性用）
+      phone = phoneTrim || `09${orderId.slice(-8)}`
+      const customerNameForDb = nameTrim || '現場顧客'
 
       // 1. upsert delivery_customer（避免 FK constraint fail）
+      //    沒填名字也補 '現場顧客' 預設，方便後台顯示
       db.prepare(`
         INSERT INTO delivery_customer (phone, name, address) VALUES (?, ?, '')
         ON CONFLICT(phone) DO UPDATE SET name = excluded.name
-      `).run(phone, customer_name.trim())
+      `).run(phone, customerNameForDb)
 
-      // 2. 寫入訂單主表（order 表沒有 note 欄，所以略過）
+      // 2. 寫入訂單主表（含選填 note）
       db.prepare(`
-        INSERT INTO "order" (order_id, order_date, status, customer_phone)
-        VALUES (?, ?, '待製作', ?)
-      `).run(orderId, isoDate, phone)
+        INSERT INTO "order" (order_id, order_date, status, customer_phone, note)
+        VALUES (?, ?, '待製作', ?, ?)
+      `).run(orderId, isoDate, phone, noteTrim || null)
 
       // 3. 寫入訂單明細（用下單時的單價快照）
       //    - 防呆：item_id 缺漏 / 查不到 menu_item → throw，整個 transaction rollback
