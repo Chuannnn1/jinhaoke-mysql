@@ -53,6 +53,21 @@ interface ImportPreviewResponse {
   error?: string
 }
 
+// 多檔案匯入：每個檔案的本地 state（preview 解析結果 + 匯入後狀態）
+interface FilePreview {
+  file: File
+  filename: string                                                // basename
+  // preview 階段
+  previewStatus: 'previewing' | 'preview_ok' | 'preview_failed'
+  preview?: ImportPreviewResponse
+  previewError?: string
+  // 確認匯入後階段
+  importStatus?: 'idle' | 'importing' | 'imported' | 'import_failed'
+  imported?: number
+  importedSkippedCodes?: number[]
+  importError?: string
+}
+
 const COLUMNS = [
   { key: '待製作', label: '待製作', color: 'bg-amber-50  border-amber-300',  header: 'bg-amber-100/70  text-amber-700',  badge: 'bg-amber-500 text-white' },
   { key: '製作中', label: '製作中', color: 'bg-blue-50   border-blue-300',   header: 'bg-blue-100/70   text-blue-700',   badge: 'bg-blue-500  text-white' },
@@ -81,21 +96,22 @@ export default function AdminOrderPage() {
   const [dragOverCol, setDragOverCol] = useState<string | null>(null)
 
   // 匯入 Modal 狀態
+  // 多檔案匯入：每個檔案各自獨立 preview / import 狀態，
+  // 但共用同一份 importMapping（code → item_id 全域對應）。
   const [importOpen, setImportOpen] = useState(false)
   const [importPhase, setImportPhase] = useState<'idle' | 'previewing' | 'done'>('idle')
-  const [importPreview, setImportPreview] = useState<ImportPreviewResponse | null>(null)
-  const [importError, setImportError] = useState<string | null>(null)
+  const [filePreviews, setFilePreviews] = useState<FilePreview[]>([])
   const [importLoading, setImportLoading] = useState(false)
-  const [importedCount, setImportedCount] = useState(0)
-  const [importedSkippedCodes, setImportedSkippedCodes] = useState<number[] | undefined>(undefined)
-  // code -> item_id mapping（UI 下拉填入）
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  // code -> item_id mapping（UI 下拉填入；所有檔案共用）
   const [importMapping, setImportMapping] = useState<Record<string, number>>({})
-  // 哪個 order 是展開狀態（import preview 內用）
+  // 哪個檔案 / 哪個 order 是展開狀態
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set())
   const [expandedOrderIds, setExpandedOrderIds] = useState<Set<string>>(new Set())
   // 哪張 kanban 訂單卡被點開（modal 用；null = 沒開）
   const [detailOrder, setDetailOrder] = useState<any | null>(null)
   const importFileRef = useRef<HTMLInputElement | null>(null)
-  const importedFileRef = useRef<File | null>(null)
   // 拖卡 in-flight 樂觀狀態：order_id → 目標 status。
   // fetchOrders 看見有 in-flight 就用樂觀值覆蓋 server 值，避免 race。
   const pendingDragRef = useRef<Map<string, string>>(new Map())
@@ -213,23 +229,31 @@ export default function AdminOrderPage() {
   // 匯入訂單流程
   // ============================================================
   const resetImport = () => {
-      setImportPhase('idle')
-      setImportPreview(null)
-      setImportError(null)
-      setImportLoading(false)
-      setImportedCount(0)
-      setImportedSkippedCodes(undefined)
-      setImportMapping({})
-      setExpandedOrderIds(new Set())
-      importedFileRef.current = null
-      if (importFileRef.current) importFileRef.current.value = ''
-    }
+    setImportPhase('idle')
+    setFilePreviews([])
+    setImportError(null)
+    setImportLoading(false)
+    setImportProgress(null)
+    setImportMapping({})
+    setExpandedFiles(new Set())
+    setExpandedOrderIds(new Set())
+    if (importFileRef.current) importFileRef.current.value = ''
+  }
 
   const toggleOrderExpand = (orderId: string) => {
     setExpandedOrderIds(prev => {
       const next = new Set(prev)
       if (next.has(orderId)) next.delete(orderId)
       else next.add(orderId)
+      return next
+    })
+  }
+
+  const toggleFileExpand = (filename: string) => {
+    setExpandedFiles(prev => {
+      const next = new Set(prev)
+      if (next.has(filename)) next.delete(filename)
+      else next.add(filename)
       return next
     })
   }
@@ -244,68 +268,109 @@ export default function AdminOrderPage() {
     resetImport()
   }
 
+  // 多檔上傳：一次 preview N 個檔案（檔案間獨立執行，並行 fetch）
+  // 共用 importMapping；任一檔案 unmapped 都會在彙總提示。
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    importedFileRef.current = file
+    const files = Array.from(e.target.files ?? [])
+    if (files.length === 0) return
     setImportError(null)
     setImportLoading(true)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
-      const data: ImportPreviewResponse = await res.json()
-      if (!data.success) {
-        setImportError(data.error || '預覽失敗')
-        setImportPhase('idle')
-      } else {
-        setImportPreview(data)
-        setImportPhase('previewing')
+
+    // 初始化所有檔案為 previewing
+    const initial: FilePreview[] = files.map(f => ({
+      file: f,
+      filename: f.name,
+      previewStatus: 'previewing',
+    }))
+    setFilePreviews(initial)
+    setImportPhase('previewing')
+
+    // 並行 preview，回來才更新對應的 FilePreview
+    await Promise.all(files.map(async (file) => {
+      try {
+        const fd = new FormData()
+        fd.append('file', file)
+        const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
+        const data: ImportPreviewResponse = await res.json().catch(() => ({ success: false, error: 'JSON parse error' }))
+        setFilePreviews(prev => prev.map(fp => fp.filename === file.name
+          ? data.success
+            ? { ...fp, previewStatus: 'preview_ok', preview: data }
+            : { ...fp, previewStatus: 'preview_failed', previewError: data.error || '預覽失敗' }
+          : fp
+        ))
+      } catch {
+        setFilePreviews(prev => prev.map(fp => fp.filename === file.name
+          ? { ...fp, previewStatus: 'preview_failed', previewError: '網路錯誤' }
+          : fp
+        ))
       }
-    } catch {
-      setImportError('網路錯誤')
-      setImportPhase('idle')
-    } finally {
-      setImportLoading(false)
-    }
+    }))
+    setImportLoading(false)
   }
 
+  // 確認匯入：序列跑每個 preview_ok 的檔案，個別檔案失敗不影響其它檔案。
   const handleConfirmImport = async () => {
-    const file = importedFileRef.current
-    if (!file) return
+    const candidates = filePreviews.filter(fp =>
+      fp.previewStatus === 'preview_ok' &&
+      (fp.preview?.errors?.length ?? 0) === 0 &&
+      (fp.preview?.valid?.length ?? 0) > 0 &&
+      fp.importStatus !== 'imported'
+    )
+    if (candidates.length === 0) return
     setImportLoading(true)
     setImportError(null)
-    try {
-      const fd = new FormData()
-      fd.append('file', file)
-      fd.append('confirm', '1')
-      fd.append('mapping', JSON.stringify(importMapping))
-      const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
-      const data: ImportPreviewResponse = await res.json()
-      if (!data.success) {
-              setImportError(data.error || '匯入失敗')
-            } else {
-              setImportedCount(data.imported ?? 0)
-              setImportedSkippedCodes(data.skipped_unmapped_codes)
-              setImportPhase('done')
-              fetchOrders()
-              setTimeout(() => {
-                closeImport()
-              }, 2000)
-            }
-    } catch {
-      setImportError('網路錯誤')
-    } finally {
-      setImportLoading(false)
+    setImportProgress({ done: 0, total: candidates.length })
+
+    let done = 0
+    for (const fp of candidates) {
+      setFilePreviews(prev => prev.map(x => x.filename === fp.filename ? { ...x, importStatus: 'importing' } : x))
+      try {
+        const fd = new FormData()
+        fd.append('file', fp.file)
+        fd.append('confirm', '1')
+        fd.append('mapping', JSON.stringify(importMapping))
+        const res = await fetch('/api/orders/import', { method: 'POST', body: fd })
+        const data: ImportPreviewResponse = await res.json().catch(() => ({ success: false, error: 'JSON parse error' }))
+        setFilePreviews(prev => prev.map(x => x.filename === fp.filename
+          ? data.success
+            ? { ...x, importStatus: 'imported', imported: data.imported ?? 0, importedSkippedCodes: data.skipped_unmapped_codes }
+            : { ...x, importStatus: 'import_failed', importError: data.error || '匯入失敗' }
+          : x
+        ))
+      } catch {
+        setFilePreviews(prev => prev.map(x => x.filename === fp.filename
+          ? { ...x, importStatus: 'import_failed', importError: '網路錯誤' }
+          : x
+        ))
+      }
+      done++
+      setImportProgress({ done, total: candidates.length })
     }
+    setImportLoading(false)
+    setImportPhase('done')
+    fetchOrders()
   }
 
-  // 真正沒對應上的 code：以 API 端 unmapped_codes 為準（API 已做自動 1:1 + 套用 user mapping），
-  // 再額外扣掉使用者剛在 UI 補的 mapping（即將在下一輪 preview/confirm 生效）。
+  // 跨檔聚合所有 preview 抓到的 unmapped code
   const computeUnmappedCodes = (): number[] => {
-    if (!importPreview) return []
-    const apiUnmapped = importPreview.unmapped_codes ?? []
-    return apiUnmapped.filter(code => !importMapping[String(code)])
+    const all = new Set<number>()
+    for (const fp of filePreviews) {
+      for (const c of fp.preview?.unmapped_codes ?? []) {
+        if (!importMapping[String(c)]) all.add(c)
+      }
+    }
+    return Array.from(all).sort((a, b) => a - b)
+  }
+
+  // 跨檔聚合 menu_options（任一檔有就拿，去重）
+  const aggregatedMenuOptions = (): ImportMenuOption[] => {
+    const map = new Map<number, ImportMenuOption>()
+    for (const fp of filePreviews) {
+      for (const opt of fp.preview?.menu_options ?? []) {
+        if (!map.has(opt.item_id)) map.set(opt.item_id, opt)
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.item_id - b.item_id)
   }
 
   return (
@@ -430,7 +495,7 @@ export default function AdminOrderPage() {
               {importPhase === 'idle' && (
                 <div className="space-y-4">
                   <p className="text-[13px] text-ink/70 leading-relaxed">
-                    請上傳當日訂單 CSV，檔名為
+                    請上傳當日訂單 CSV（可一次選多檔，每個檔案對應一個日期），檔名為
                     <code className="font-mono text-[12px] bg-gray-100 px-1.5 py-0.5 rounded mx-1">
                       MMDD.csv
                     </code>
@@ -441,15 +506,17 @@ export default function AdminOrderPage() {
                   </p>
                   <ul className="text-[12px] text-ink/50 list-disc pl-5 space-y-0.5">
                     <li>品項以分號分隔 code，可加 *N 表數量（例：5;7*3）</li>
-                    <li>code 直接對應菜單 item_id；已下架品項（如 6 號滷豬腳便當）仍會自動辨識並標記</li>
+                    <li>code 直接對應菜單 item_id；已下架品項仍會自動辨識並標記</li>
                     <li>付款狀態 0 = 待付款；1 = 已完成</li>
                     <li>電話接受 3~15 碼或 null</li>
+                    <li>多檔匯入：選擇後並行 preview，按「全部匯入」依序送 server；個別失敗不影響其它檔案</li>
                   </ul>
                   <div className="flex items-center gap-3">
                     <input
                       ref={importFileRef}
                       type="file"
                       accept=".csv"
+                      multiple
                       onChange={handleFileChange}
                       disabled={importLoading}
                       className="text-[12px] text-ink/70 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:bg-white file:text-ink file:text-[12px] file:cursor-pointer file:hover:bg-clay file:hover:text-white file:hover:border-clay"
@@ -471,96 +538,168 @@ export default function AdminOrderPage() {
                 </div>
               )}
 
-              {importPhase === 'previewing' && importPreview && (() => {
+              {importPhase === 'previewing' && filePreviews.length > 0 && (() => {
                 const unmappedCodes = computeUnmappedCodes()
+                const allOptions = aggregatedMenuOptions()
+                // 聚合 stats
+                const aggOrders = filePreviews.reduce((s, fp) => s + (fp.preview?.summary?.orders ?? 0), 0)
+                const aggItems = filePreviews.reduce((s, fp) => s + (fp.preview?.summary?.items ?? 0), 0)
+                const aggErrors = filePreviews.reduce((s, fp) => s + (fp.preview?.summary?.errors ?? 0), 0)
+                const stillPreviewing = filePreviews.some(fp => fp.previewStatus === 'previewing')
                 return (
                   <div className="space-y-4">
+                    {/* 聚合 stats */}
                     <div className="grid grid-cols-4 gap-3">
                       <div className="bg-gray-50 rounded-lg p-3 border border-border">
-                        <p className="text-[11px] text-ink/40">檔案 / 日期</p>
-                        <p className="font-mono text-[13px] text-ink font-semibold truncate">
-                          {importPreview.summary?.file ?? '—'}
+                        <p className="text-[11px] text-ink/40">檔案</p>
+                        <p className="font-mono text-lg text-ink font-semibold">
+                          {filePreviews.length}
                         </p>
-                        <p className="font-mono text-[11px] text-ink/50">
-                          {importPreview.summary?.order_date ?? '—'}
-                        </p>
+                        {stillPreviewing && (
+                          <p className="text-[10px] text-ink/40">解析中…</p>
+                        )}
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 border border-border">
-                        <p className="text-[11px] text-ink/40">訂單數</p>
-                        <p className="font-mono text-lg text-ink font-semibold">
-                          {importPreview.summary?.orders ?? 0}
-                        </p>
+                        <p className="text-[11px] text-ink/40">訂單合計</p>
+                        <p className="font-mono text-lg text-ink font-semibold">{aggOrders}</p>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3 border border-border">
-                        <p className="text-[11px] text-ink/40">項目數</p>
-                        <p className="font-mono text-lg text-ink font-semibold">
-                          {importPreview.summary?.items ?? 0}
-                        </p>
+                        <p className="text-[11px] text-ink/40">項目合計</p>
+                        <p className="font-mono text-lg text-ink font-semibold">{aggItems}</p>
                       </div>
                       <div className={`rounded-lg p-3 border ${
-                        (importPreview.summary?.errors ?? 0) > 0
-                          ? 'bg-red-50 border-red-200'
-                          : 'bg-gray-50 border-border'
+                        aggErrors > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-border'
                       }`}>
-                        <p className="text-[11px] text-ink/40">錯誤</p>
-                        <p className={`font-mono text-lg font-semibold ${
-                          (importPreview.summary?.errors ?? 0) > 0 ? 'text-red-500' : 'text-ink'
-                        }`}>
-                          {importPreview.summary?.errors ?? 0}
-                        </p>
+                        <p className="text-[11px] text-ink/40">錯誤列數</p>
+                        <p className={`font-mono text-lg font-semibold ${aggErrors > 0 ? 'text-red-500' : 'text-ink'}`}>{aggErrors}</p>
                       </div>
                     </div>
 
                     {unmappedCodes.length > 0 && (
                       <div className="selectable border border-amber-200 bg-amber-50/40 rounded-lg px-3 py-2">
-                        <p className="text-[12px] text-amber-700">
-                          已忽略 {unmappedCodes.length} 個未對應 code（{unmappedCodes.join(', ')}），這些品項不會匯入。
+                        <p className="text-[12px] text-amber-700 mb-2">
+                          以下 code 在菜單沒有對應，匯入時會被跳過。可在下方下拉手動指定：
                         </p>
-                      </div>
-                    )}
-
-                    {importPreview.errors && importPreview.errors.length > 0 && (
-                      <div className="selectable">
-                        <p className="text-[12px] text-ink/60 font-semibold mb-2">錯誤列表（可拖曳複製）</p>
-                        <div className="border border-red-200 rounded-lg overflow-hidden max-h-40 overflow-y-auto">
-                          <table className="w-full text-[12px]">
-                            <thead className="bg-red-50 text-ink/70 sticky top-0">
-                              <tr>
-                                <th className="px-3 py-2 text-left w-16">列號</th>
-                                <th className="px-3 py-2 text-left">原因</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {importPreview.errors.map((e, i) => (
-                                <tr key={i} className="border-t border-red-100">
-                                  <td className="px-3 py-2 font-mono">{e.row}</td>
-                                  <td className="px-3 py-2 text-red-600">{e.reason}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                        <div className="flex flex-wrap gap-2">
+                          {unmappedCodes.map(code => (
+                            <div key={code} className="flex items-center gap-1.5 bg-white border border-amber-300 rounded-md px-2 py-1">
+                              <span className="font-mono text-[12px] text-amber-700">{code}</span>
+                              <span className="text-amber-600 text-[11px]">→</span>
+                              <select
+                                value={importMapping[String(code)] ?? ''}
+                                onChange={e => {
+                                  const v = e.target.value
+                                  setImportMapping(prev => {
+                                    const next = { ...prev }
+                                    if (v) next[String(code)] = parseInt(v, 10)
+                                    else delete next[String(code)]
+                                    return next
+                                  })
+                                }}
+                                className="text-[11px] border-0 focus:outline-none focus:ring-0 bg-transparent"
+                              >
+                                <option value="">忽略</option>
+                                {allOptions.map(opt => (
+                                  <option key={opt.item_id} value={opt.item_id}>
+                                    {opt.item_id}. {opt.name}{opt.is_active === 0 ? '（已下架）' : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {importPreview.valid && importPreview.valid.length > 0 && (
-                      <div>
-                        <p className="text-[12px] text-ink/60 font-semibold mb-2">可匯入訂單</p>
-                        <div className="border border-border rounded-lg overflow-hidden">
-                          <table className="w-full text-[12px]">
-                            <thead className="bg-gray-50 text-ink/70">
-                              <tr>
-                                <th className="px-3 py-2 text-left w-32">訂單編號</th>
-                                <th className="px-3 py-2 text-left w-20">狀態</th>
-                                <th className="px-3 py-2 text-left">摘要</th>
-                                <th className="px-3 py-2 text-right w-24">計算總額</th>
-                                <th className="px-3 py-2 text-right w-20">CSV金額</th>
-                                <th className="px-3 py-2 text-left w-28">電話</th>
-                                <th className="px-3 py-2 text-center w-12"></th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {importPreview.valid.map(o => {
+                    {/* 每個檔案一張展開卡 */}
+                    <div className="space-y-2">
+                      {filePreviews.map(fp => {
+                        const isExpanded = expandedFiles.has(fp.filename)
+                        const previewing = fp.previewStatus === 'previewing'
+                        const failed = fp.previewStatus === 'preview_failed'
+                        const ok = fp.previewStatus === 'preview_ok'
+                        const fileErrors = fp.preview?.errors?.length ?? 0
+                        const fileOrders = fp.preview?.summary?.orders ?? 0
+                        const fileItems = fp.preview?.summary?.items ?? 0
+                        const fileDate = fp.preview?.summary?.order_date ?? '—'
+                        return (
+                          <div key={fp.filename} className="border border-border rounded-lg overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => ok && toggleFileExpand(fp.filename)}
+                              disabled={!ok}
+                              className="w-full flex items-center justify-between gap-3 px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors disabled:cursor-default disabled:hover:bg-gray-50"
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <span className="text-[14px]">
+                                  {previewing && <span className="text-ink/40">⏳</span>}
+                                  {failed && <span className="text-red-500">✗</span>}
+                                  {ok && fileErrors === 0 && <span className="text-green-600">✓</span>}
+                                  {ok && fileErrors > 0 && <span className="text-amber-500">⚠</span>}
+                                </span>
+                                <span className="font-mono text-[13px] text-ink font-semibold">{fp.filename}</span>
+                                <span className="font-mono text-[11px] text-ink/50">{fileDate}</span>
+                                {ok && (
+                                  <span className="text-[11px] text-ink/50">
+                                    {fileOrders} 筆訂單 · {fileItems} 項
+                                    {fileErrors > 0 && (
+                                      <span className="text-red-500 ml-1">· {fileErrors} 列錯誤</span>
+                                    )}
+                                  </span>
+                                )}
+                                {previewing && <span className="text-[11px] text-ink/40">解析中…</span>}
+                                {failed && <span className="text-[11px] text-red-500">{fp.previewError}</span>}
+                              </div>
+                              {ok && (
+                                <span className="text-ink/40 text-[12px] shrink-0">
+                                  {isExpanded ? '▲' : '▼'}
+                                </span>
+                              )}
+                            </button>
+
+                            {isExpanded && ok && fp.preview && (
+                              <div className="px-4 py-3 bg-white space-y-3 border-t border-border">
+                                {fp.preview.errors && fp.preview.errors.length > 0 && (
+                                  <div className="selectable">
+                                    <p className="text-[12px] text-ink/60 font-semibold mb-2">錯誤列表</p>
+                                    <div className="border border-red-200 rounded-lg overflow-hidden max-h-32 overflow-y-auto">
+                                      <table className="w-full text-[12px]">
+                                        <thead className="bg-red-50 text-ink/70 sticky top-0">
+                                          <tr>
+                                            <th className="px-3 py-1.5 text-left w-16">列號</th>
+                                            <th className="px-3 py-1.5 text-left">原因</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {fp.preview.errors.map((e, i) => (
+                                            <tr key={i} className="border-t border-red-100">
+                                              <td className="px-3 py-1.5 font-mono">{e.row}</td>
+                                              <td className="px-3 py-1.5 text-red-600">{e.reason}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                                {fp.preview.valid && fp.preview.valid.length > 0 && (
+                                  <div>
+                                    <p className="text-[12px] text-ink/60 font-semibold mb-2">可匯入訂單</p>
+                                    <div className="border border-border rounded-lg overflow-hidden">
+                                      <table className="w-full text-[12px]">
+                                        <thead className="bg-gray-50 text-ink/70">
+                                          <tr>
+                                            <th className="px-3 py-2 text-left w-32">訂單編號</th>
+                                            <th className="px-3 py-2 text-left w-20">狀態</th>
+                                            <th className="px-3 py-2 text-left">摘要</th>
+                                            <th className="px-3 py-2 text-right w-24">計算總額</th>
+                                            <th className="px-3 py-2 text-right w-20">CSV金額</th>
+                                            <th className="px-3 py-2 text-left w-28">電話</th>
+                                            <th className="px-3 py-2 text-center w-12"></th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {fp.preview.valid.map(o => {
                                 const expanded = expandedOrderIds.has(o.order_id)
                                 return (
                                   <>
@@ -658,11 +797,17 @@ export default function AdminOrderPage() {
                                   </>
                                 )
                               })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
 
                     {importError && (
                       <p className="text-[12px] text-red-500">{importError}</p>
@@ -671,24 +816,59 @@ export default function AdminOrderPage() {
                 )
               })()}
 
-              {importPhase === 'done' && (
-                              <div className="py-10 text-center">
-                                <p className="text-ink font-semibold text-base">
-                                  已匯入 {importedCount} 筆訂單
-                                </p>
-                                {importedSkippedCodes && importedSkippedCodes.length > 0 && (
-                                  <p className="text-[12px] text-amber-600 mt-1">
-                                    以下 code 因無對應餐點已被跳過：{importedSkippedCodes.join(', ')}
-                                  </p>
-                                )}
-                                <p className="text-[12px] text-ink/40 mt-2">視窗即將關閉…</p>
-                              </div>
-                            )}
+              {importPhase === 'done' && (() => {
+                const totalImported = filePreviews.reduce((s, fp) => s + (fp.imported ?? 0), 0)
+                const totalFailed = filePreviews.filter(fp => fp.importStatus === 'import_failed').length
+                const aggSkipped = Array.from(new Set(filePreviews.flatMap(fp => fp.importedSkippedCodes ?? []))).sort((a, b) => a - b)
+                return (
+                  <div className="space-y-3">
+                    <div className="py-4 text-center border-b border-border">
+                      <p className="text-ink font-semibold text-lg">
+                        共匯入 {totalImported} 筆訂單
+                        {totalFailed > 0 && (
+                          <span className="text-red-500 ml-2">（{totalFailed} 個檔案失敗）</span>
+                        )}
+                      </p>
+                      {aggSkipped.length > 0 && (
+                        <p className="text-[12px] text-amber-600 mt-1">
+                          跳過的 code：{aggSkipped.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      {filePreviews.map(fp => (
+                        <div key={fp.filename} className="flex items-center justify-between gap-3 px-3 py-2 border border-border rounded-md">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[14px]">
+                              {fp.importStatus === 'imported' && <span className="text-green-600">✓</span>}
+                              {fp.importStatus === 'import_failed' && <span className="text-red-500">✗</span>}
+                              {fp.importStatus === undefined && <span className="text-ink/40">—</span>}
+                            </span>
+                            <span className="font-mono text-[12px] text-ink">{fp.filename}</span>
+                            <span className="font-mono text-[11px] text-ink/40">{fp.preview?.summary?.order_date ?? ''}</span>
+                          </div>
+                          <div className="text-[12px] text-ink/60">
+                            {fp.importStatus === 'imported' && <span>已匯入 {fp.imported} 筆</span>}
+                            {fp.importStatus === 'import_failed' && <span className="text-red-500">{fp.importError}</span>}
+                            {fp.importStatus === undefined && <span className="text-ink/40">（未匯入）</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
-            <div className="px-6 py-3 border-t border-border flex items-center justify-end gap-2 shrink-0">
+            <div className="px-6 py-3 border-t border-border flex items-center justify-between gap-2 shrink-0">
+              {importPhase === 'previewing' && importProgress && (
+                <p className="text-[12px] text-ink/60 font-mono">
+                  進度 {importProgress.done} / {importProgress.total}
+                </p>
+              )}
+              {!importProgress && <div />}
               {importPhase === 'previewing' && (
-                <>
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={resetImport}
@@ -700,16 +880,21 @@ export default function AdminOrderPage() {
                   <button
                     type="button"
                     onClick={handleConfirmImport}
-                    disabled={
-                                          importLoading ||
-                                          (importPreview?.errors?.length ?? 0) > 0 ||
-                                          (importPreview?.valid?.length ?? 0) === 0
-                                        }
+                    disabled={(() => {
+                      if (importLoading) return true
+                      const importable = filePreviews.filter(fp =>
+                        fp.previewStatus === 'preview_ok' &&
+                        (fp.preview?.errors?.length ?? 0) === 0 &&
+                        (fp.preview?.valid?.length ?? 0) > 0 &&
+                        fp.importStatus !== 'imported'
+                      )
+                      return importable.length === 0
+                    })()}
                     className="text-[12px] px-3 py-1.5 rounded-md bg-clay text-white hover:bg-clay-deep disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {importLoading ? '匯入中…' : '確認匯入'}
+                    {importLoading ? '匯入中…' : '全部匯入'}
                   </button>
-                </>
+                </div>
               )}
               {importPhase !== 'previewing' && (
                 <button
