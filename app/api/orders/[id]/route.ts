@@ -79,6 +79,31 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const pool = getPool()
+    const body = await req.json()
+    const note = body.note !== undefined ? (body.note || null) : undefined
+
+    if (note === undefined) {
+      return NextResponse.json({ success: false, error: '缺少 note 欄位' }, { status: 400 })
+    }
+
+    await pool.execute(
+      'UPDATE `訂單` SET `備註` = ? WHERE `訂單編號` = ?',
+      [note, params.id]
+    )
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    console.error('[PATCH /api/orders/:id]', err)
+    return NextResponse.json({ success: false, error: '伺服器錯誤' }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }

@@ -1019,15 +1019,18 @@ export default function AdminOrderPage() {
                 </table>
               </div>
 
-              {/* note */}
-              {detailOrder.note && (
-                <div>
-                  <p className="text-[11px] text-ink-mute uppercase tracking-wider mb-1">備註</p>
-                  <p className="text-[13px] text-ink/75 leading-relaxed bg-cream rounded-lg px-3 py-2 border border-border-soft">
-                    {detailOrder.note}
-                  </p>
-                </div>
-              )}
+              {/* note — editable */}
+              <div>
+                <p className="text-[11px] text-ink-mute uppercase tracking-wider mb-1">備註</p>
+                <NoteEditor
+                  orderId={detailOrder.order_id}
+                  initialNote={detailOrder.note ?? ''}
+                  onSaved={(note) => {
+                    setOrders(prev => prev.map(o => o.order_id === detailOrder.order_id ? { ...o, note } : o))
+                    setDetailOrder((prev: any) => prev ? { ...prev, note } : prev)
+                  }}
+                />
+              </div>
             </div>
 
             {/* footer total */}
@@ -1047,6 +1050,47 @@ function Meta({ label, value }: { label: string; value: string }) {
     <div className="flex items-baseline gap-2">
       <span className="text-ink-mute text-[11px] uppercase tracking-wider">{label}</span>
       <span className="text-ink/85 font-mono text-[12px]">{value}</span>
+    </div>
+  )
+}
+
+function NoteEditor({ orderId, initialNote, onSaved }: { orderId: string; initialNote: string; onSaved: (note: string | null) => void }) {
+  const [value, setValue] = useState(initialNote)
+  const [saving, setSaving] = useState(false)
+  const changed = value !== initialNote
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ note: value.trim() || null }),
+      })
+      const data = await res.json()
+      if (data.success) onSaved(value.trim() || null)
+    } catch { /* silent */ }
+    setSaving(false)
+  }
+
+  return (
+    <div className="flex gap-2 items-start">
+      <textarea
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        placeholder="無備註"
+        rows={2}
+        className="flex-1 text-[13px] text-ink/75 leading-relaxed bg-cream rounded-lg px-3 py-2 border border-border-soft focus:outline-none focus:ring-1 focus:ring-clay resize-none"
+      />
+      {changed && (
+        <button
+          onClick={save}
+          disabled={saving}
+          className="shrink-0 px-3 py-1.5 text-xs bg-clay text-white rounded-lg hover:bg-clay-deep transition-colors disabled:opacity-50"
+        >
+          {saving ? '...' : '儲存'}
+        </button>
+      )}
     </div>
   )
 }

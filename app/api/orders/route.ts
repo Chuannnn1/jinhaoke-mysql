@@ -51,9 +51,20 @@ interface GroupedOrder {
 // ============================================================
 // GET /api/orders — 取得全部訂單
 // ============================================================
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const pool = getPool()
+    const { searchParams } = new URL(request.url)
+    const allDays = searchParams.get('all') === '1'
+
+    let dateFilter = ''
+    const params: string[] = []
+    if (!allDays) {
+      const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+      dateFilter = 'WHERE DATE(o.`訂單日期`) = ?'
+      params.push(today)
+    }
+
     const [rows] = await pool.execute<OrderJoinRow[]>(`
       SELECT
         o.\`訂單編號\`,
@@ -70,8 +81,9 @@ export async function GET() {
       FROM \`訂單\` o
       LEFT JOIN \`訂單明細\` od ON o.\`訂單編號\` = od.\`訂單編號\`
       LEFT JOIN \`餐點\` m ON od.\`餐點編號\` = m.\`餐點編號\`
+      ${dateFilter}
       ORDER BY o.\`訂單日期\` DESC
-    `)
+    `, params)
 
     const grouped: Record<string, GroupedOrder> = {}
     for (const row of rows) {

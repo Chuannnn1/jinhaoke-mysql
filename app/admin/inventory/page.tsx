@@ -46,16 +46,6 @@ interface LowStockItem {
 
 type TabKey = 'inventory' | 'suppliers'
 
-const CATEGORIES = ['全部', '肉類', '海鮮', '乾貨', '調味料', '耗材']
-
-function guessCategory(name: string): string {
-  const n = name.toLowerCase()
-  if (/魚|鱈|蝦|蟹|干貝|海/.test(n)) return '海鮮'
-  if (/肉|排|腿|片|豬|雞|牛|五花|炸/.test(n)) return '肉類'
-  if (/醬|油|鹽|糖|沙茶|紅麴|滷包/.test(n)) return '調味料'
-  if (/米|蛋|蔬|菜脯|便當|筷|盒/.test(n)) return '乾貨'
-  return '耗材'
-}
 
 function effectiveBlockThreshold(item: InventoryItem): number {
   if (item.order_block_threshold !== null && item.order_block_threshold !== undefined) {
@@ -133,7 +123,6 @@ function InventoryTab() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeCategory, setActiveCategory] = useState('全部')
   const [search, setSearch] = useState('')
 
   const [editTarget, setEditTarget] = useState<InventoryItem | null>(null)
@@ -194,11 +183,8 @@ function InventoryTab() {
   }, [])
 
   const filtered = useMemo(() => inventory.filter(item => {
-    const cat = guessCategory(item.name)
-    const matchCategory = activeCategory === '全部' || cat === activeCategory
-    const matchSearch = search === '' || item.name.includes(search)
-    return matchCategory && matchSearch
-  }), [inventory, activeCategory, search])
+    return search === '' || item.name.includes(search)
+  }), [inventory, search])
 
   const getStatus = (item: InventoryItem) => {
     const stock = item.stock_qty
@@ -329,7 +315,6 @@ function InventoryTab() {
         </div>
       </div>
 
-      {/* 搜尋 + 分類 */}
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
           type="text"
@@ -338,21 +323,6 @@ function InventoryTab() {
           onChange={e => setSearch(e.target.value)}
           className="px-3 py-2 border border-border rounded-lg text-sm w-64 bg-white focus:outline-none focus:ring-2 focus:ring-clay"
         />
-        <div className="flex flex-wrap gap-2">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCategory(cat)}
-              className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
-                activeCategory === cat
-                  ? 'bg-gray-500 text-white'
-                  : 'bg-white text-ink/60 border border-border hover:bg-gray-50'
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
         <div className="flex-1" />
         <button
           onClick={openLowStockModal}
@@ -402,20 +372,14 @@ function InventoryTab() {
               <th className="px-4 py-3 font-medium">品名</th>
               <th className="px-4 py-3 font-medium text-right">目前庫存</th>
               <th className="px-4 py-3 font-medium text-right">安全存量</th>
-              <th className="px-4 py-3 font-medium text-right">暫停接單點</th>
               <th className="px-4 py-3 font-medium text-center">狀態</th>
-              <th className="px-4 py-3 font-medium">分類</th>
               <th className="px-4 py-3 font-medium">供應商</th>
-              <th className="px-4 py-3 font-medium text-right">叫貨單位</th>
               <th className="px-4 py-3 font-medium text-center">操作</th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((item, idx) => {
               const status = getStatus(item)
-              const cat = guessCategory(item.name)
-              const block = effectiveBlockThreshold(item)
-              const isOverride = item.order_block_threshold !== null && item.order_block_threshold !== undefined
               return (
                 <tr
                   key={item.name}
@@ -428,21 +392,11 @@ function InventoryTab() {
                   <td className="px-4 py-3 text-right text-ink/40 font-mono">
                     {formatQty(item.safety_stock)} <span className="text-ink/30 text-xs">{item.stock_unit}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono">
-                    <span className={isOverride ? 'text-clay' : 'text-ink/40'}>
-                      {formatQty(block)}
-                    </span>
-                    <span className="text-ink/30 text-xs"> {item.stock_unit}</span>
-                    {isOverride && (
-                      <span className="block text-[10px] text-clay/70">手動覆寫</span>
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${status.color}`}>
                       {status.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-ink/50 text-xs">{cat}</td>
                   <td className="px-4 py-3 text-xs">
                     <select
                       value={item.supplier_name ?? ''}
@@ -455,14 +409,11 @@ function InventoryTab() {
                       ))}
                     </select>
                   </td>
-                  <td className="px-4 py-3 text-right text-ink/40 text-xs">
-                    {item.order_unit}（{item.qty_per_order_unit} {item.stock_unit}/{item.order_unit}）
-                  </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-2">
                       <Link
-                        href={`/admin/purchase?open=1&category=${encodeURIComponent(item.category || '其他')}&ingredient=${encodeURIComponent(item.name)}`}
-                        title={`為「${item.name}」建採購單（分類預填：${item.category || '其他'}）`}
+                        href={`/admin/purchase?open=1&ingredient=${encodeURIComponent(item.name)}`}
+                        title={`為「${item.name}」建採購單`}
                         className="text-[11px] px-2 py-0.5 rounded-md border border-clay/40 text-clay hover:bg-clay hover:text-white transition-colors"
                       >
                         + 採購單
