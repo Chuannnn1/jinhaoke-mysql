@@ -821,7 +821,6 @@ export default function AdminOrderPage() {
               {importPhase === 'done' && (() => {
                 const totalImported = filePreviews.reduce((s, fp) => s + (fp.imported ?? 0), 0)
                 const totalFailed = filePreviews.filter(fp => fp.importStatus === 'import_failed').length
-                const aggSkipped = Array.from(new Set(filePreviews.flatMap(fp => fp.importedSkippedCodes ?? []))).sort((a, b) => a - b)
                 return (
                   <div className="space-y-3">
                     <div className="py-4 text-center border-b border-border">
@@ -831,11 +830,6 @@ export default function AdminOrderPage() {
                           <span className="text-red-500 ml-2">（{totalFailed} 個檔案失敗）</span>
                         )}
                       </p>
-                      {aggSkipped.length > 0 && (
-                        <p className="text-[12px] text-amber-600 mt-1">
-                          跳過的 code：{aggSkipped.join(', ')}
-                        </p>
-                      )}
                     </div>
                     <div className="space-y-1">
                       {filePreviews.map(fp => (
@@ -967,7 +961,8 @@ export default function AdminOrderPage() {
                     const qty = it.quantity ?? it.qty ?? 1
                     const unitPrice = it.unit_price ?? 0
                     const name = it.name ?? it.item_name ?? `?code${it.code}`
-                    if (detail.length > 0 && detail.length === qty) {
+                    const hasAnyAddon = detail.length > 0 && detail.length === qty && detail.some(u => u.length > 0)
+                    if (hasAnyAddon) {
                       for (const unitAddons of detail) {
                         const addonTotal = unitAddons.reduce((s: number, a: { price: number }) => s + a.price, 0)
                         expanded.push({ name, unitPrice, qty: 1, addons: unitAddons, addonTotal, subtotal: unitPrice + addonTotal })

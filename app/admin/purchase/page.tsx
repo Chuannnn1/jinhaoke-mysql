@@ -238,7 +238,7 @@ function PurchasePageInner() {
                       </p>
                       <p className="text-sm font-semibold text-ink">{po.供應商名稱}</p>
                     </div>
-                    <div className="text-xs text-ink/50 font-mono">{po.採購單日期}</div>
+                    <div className="text-xs text-ink/50 font-mono">{po.採購單日期?.slice(0, 10)}</div>
                     <div className="text-sm font-mono text-clay">
                       NT$ {formatMoney(po.進貨食材總成本)}
                     </div>
@@ -353,7 +353,7 @@ function PurchasePageInner() {
                           <tbody>
                             {po.returns.map(r => (
                               <tr key={r.退貨單編號} className="border-t border-gray-200">
-                                <td className="py-1.5 font-mono text-ink/60">{r.退貨單日期}</td>
+                                <td className="py-1.5 font-mono text-ink/60">{r.退貨單日期?.slice(0, 10)}</td>
                                 <td className="py-1.5 text-ink">{r.食材名稱}</td>
                                 <td className="py-1.5 text-right font-mono text-orange-600">
                                   {formatQty(r.退貨數量)}

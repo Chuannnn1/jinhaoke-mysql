@@ -65,7 +65,6 @@ export default function CustomerOrderPage() {
   const [activeTag, setActiveTag] = useState('全部')
   const [cart, setCart] = useState([])
   const [cartOpen, setCartOpen] = useState(false)
-  const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerNote, setCustomerNote] = useState('')
   // 客製化 modal：null = 沒開；否則是該品項的 item_id
@@ -174,8 +173,6 @@ export default function CustomerOrderPage() {
     if (cart.length === 0) return alert('購物車是空的')
 
     const payload = {
-      // 兩個都選填，使用者沒填就送空字串，後端會自動補 phone 佔位、name 預設「現場顧客」
-      customer_name: customerName,
       customer_phone: customerPhone,
       note: customerNote,
       // POST 使用真實的 DB item_id；客製化以陣列形式帶上去（長度 = quantity）
@@ -204,7 +201,6 @@ export default function CustomerOrderPage() {
 
       setTimeout(() => {
         setCart([])
-        setCustomerName('')
         setCustomerPhone('')
         setCustomerNote('')
         setOrderDone(false)
@@ -482,19 +478,12 @@ export default function CustomerOrderPage() {
         <div className="border-t border-border bg-gray-50 px-6 py-4 shrink-0">
           <div className="flex gap-2 mb-2">
             <input
-              type="text"
-              placeholder="姓名（選填）"
-              value={customerName}
-              onChange={e => setCustomerName(e.target.value)}
-              className="flex-1 bg-white border border-border rounded-md px-3 py-2 text-[13px] text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-clay"
-            />
-            <input
               type="tel"
               inputMode="tel"
-              placeholder="末三碼即可（選填）"
+              placeholder="電話末三碼（選填）"
               value={customerPhone}
               onChange={e => setCustomerPhone(e.target.value)}
-              className="w-32 bg-white border border-border rounded-md px-3 py-2 text-[13px] text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-clay font-mono"
+              className="flex-1 bg-white border border-border rounded-md px-3 py-2 text-[13px] text-ink placeholder-ink-faint focus:outline-none focus:ring-1 focus:ring-clay font-mono"
             />
           </div>
           <textarea

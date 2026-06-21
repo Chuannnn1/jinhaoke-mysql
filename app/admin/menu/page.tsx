@@ -356,12 +356,6 @@ export default function MenuPage() {
                 </button>
               </div>
               <div className="flex-1" />
-              <button
-                onClick={openNew}
-                className="px-4 py-2 bg-gray-500 text-white text-sm rounded-lg hover:bg-clay-deep transition-colors font-medium"
-              >
-                + 新增品項
-              </button>
             </div>
 
             {/* Item list grouped by category */}
