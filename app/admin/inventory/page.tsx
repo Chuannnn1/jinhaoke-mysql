@@ -356,9 +356,9 @@ function InventoryTab() {
           <thead>
             <tr className="bg-gray-50 text-ink/50 text-left text-xs uppercase tracking-wide">
               <th className="px-4 py-3 font-medium">品名</th>
-              <th className="px-4 py-3 font-medium text-center">單位</th>
               <th className="px-4 py-3 font-medium text-right">目前庫存</th>
               <th className="px-4 py-3 font-medium text-right">安全存量</th>
+              <th className="px-4 py-3 font-medium text-center">單位</th>
               <th className="px-4 py-3 font-medium text-center">狀態</th>
               <th className="px-4 py-3 font-medium">供應商</th>
               <th className="px-4 py-3 font-medium text-center">操作</th>
@@ -373,13 +373,13 @@ function InventoryTab() {
                   className={`border-t border-gray-200 hover:bg-gray-50/50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                 >
                   <td className="px-4 py-3 font-medium text-ink">{item.name}</td>
-                  <td className="px-4 py-3 text-center text-xs text-ink/60">{item.stock_unit}</td>
                   <td className="px-4 py-3 text-right font-mono text-ink">
                     {formatQty(item.stock_qty)}
                   </td>
                   <td className="px-4 py-3 text-right text-ink/40 font-mono">
                     {formatQty(item.safety_stock)}
                   </td>
+                  <td className="px-4 py-3 text-center text-xs text-ink/60">{item.stock_unit}</td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${status.color}`}>
                       {status.label}
