@@ -105,18 +105,3 @@ CREATE TABLE IF NOT EXISTS `退貨單` (
         ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- (10) 管理員登入
-CREATE TABLE IF NOT EXISTS `管理員登入` (
-    `登入令牌`     VARCHAR(64) PRIMARY KEY,
-    `建立時間`     DATETIME NOT NULL,
-    `過期時間`     DATETIME NOT NULL,
-    `最後活動`     DATETIME,
-    `裝置資訊`     TEXT
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- (11) 管理員設定
-CREATE TABLE IF NOT EXISTS `管理員設定` (
-    `設定鍵`       VARCHAR(100) PRIMARY KEY,
-    `設定值`       TEXT NOT NULL,
-    `更新時間`     DATETIME NOT NULL
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

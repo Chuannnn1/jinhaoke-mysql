@@ -20,7 +20,7 @@ const COOKIE_NAME = 'jinhaoke_admin_session'
 
 function hasSessionCookie(req: NextRequest): boolean {
   const v = req.cookies.get(COOKIE_NAME)?.value
-  return !!v && v.length === 64  // 32-byte hex = 64 chars
+  return !!v && v.length > 10
 }
 
 function isPublicApi(pathname: string, method: string): boolean {

@@ -1,52 +1,33 @@
-// app/api/auth/login/route.ts
 import { NextResponse } from 'next/server'
-import { verifyPassword, createSession, buildSessionCookie, getStoredHash } from '@/lib/auth'
-
-interface LoginBody {
-  password?: string
-}
+import { verifyPassword, createSessionToken, buildSessionCookie, getStoredHash } from '@/lib/auth'
 
 export async function POST(req: Request) {
   try {
-    const body: LoginBody = await req.json().catch(() => ({}))
+    const body = await req.json().catch(() => ({}))
     const password = (body.password || '').toString()
     if (!password) {
-      return NextResponse.json(
-        { success: false, error: '請輸入密碼' },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: '請輸入密碼' }, { status: 400 })
     }
 
-    // 優先讀 env，fallback 讀 admin_setting DB
-    const expectedHash = await getStoredHash()
+    const expectedHash = getStoredHash()
     if (!expectedHash) {
-      // 尚未設定 → 引導去 first-boot 註冊頁
       return NextResponse.json(
-        { success: false, error: 'not_configured', message: '尚未設定密碼，請先在登入頁完成初始化' },
+        { success: false, error: '尚未設定 ADMIN_PASSWORD_HASH 環境變數' },
         { status: 503 }
       )
     }
 
     if (!verifyPassword(password, expectedHash)) {
-      // 故意慢一點點，降低 brute-force 速度（scrypt 本身已經慢）
       await new Promise(r => setTimeout(r, 250))
-      return NextResponse.json(
-        { success: false, error: '密碼錯誤' },
-        { status: 401 }
-      )
+      return NextResponse.json({ success: false, error: '密碼錯誤' }, { status: 401 })
     }
 
-    const userAgent = req.headers.get('user-agent') ?? undefined
-    const { token, expiresAt } = await createSession(userAgent)
-
+    const { token, expiresAt } = createSessionToken()
     const res = NextResponse.json({ success: true, expires_at: expiresAt.toISOString() })
     res.headers.set('Set-Cookie', buildSessionCookie(token, expiresAt, req))
     return res
   } catch (err) {
     console.error('[POST /api/auth/login]', err)
-    return NextResponse.json(
-      { success: false, error: '未知錯誤' },
-      { status: 500 }
-    )
+    return NextResponse.json({ success: false, error: '未知錯誤' }, { status: 500 })
   }
 }
