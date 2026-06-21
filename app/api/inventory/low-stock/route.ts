@@ -3,11 +3,11 @@ import { getPool } from '@/lib/db'
 import type { RowDataPacket } from 'mysql2/promise'
 
 interface LowStockRow extends RowDataPacket {
-  食材名稱: string
-  庫存數量: number
-  安全存量: number
-  庫存單位: string
-  供應商名稱: string | null
+  name: string
+  stock_qty: number
+  safety_stock: number
+  stock_unit: string
+  supplier_name: string | null
 }
 
 export async function GET() {
@@ -15,22 +15,32 @@ export async function GET() {
     const pool = getPool()
 
     const [rows] = await pool.execute<LowStockRow[]>(`
-      SELECT \`食材名稱\`, \`庫存數量\`, \`安全存量\`, \`庫存單位\`, \`供應商名稱\`
+      SELECT
+        \`食材名稱\` AS name,
+        \`庫存數量\` AS stock_qty,
+        \`安全存量\` AS safety_stock,
+        \`庫存單位\` AS stock_unit,
+        \`供應商名稱\` AS supplier_name
       FROM \`食材\`
       WHERE \`安全存量\` > 0 AND \`庫存數量\` <= \`安全存量\`
       ORDER BY (\`庫存數量\` / NULLIF(\`安全存量\`, 0)) ASC, \`食材名稱\`
     `)
 
     const data = rows.map(it => {
-      const target = it.安全存量 * 2
-      const needed = Math.max(0, target - it.庫存數量)
+      const target = it.safety_stock * 2
+      const needed = Math.max(0, target - it.stock_qty)
       return {
-        食材名稱: it.食材名稱,
-        庫存數量: it.庫存數量,
-        安全存量: it.安全存量,
-        庫存單位: it.庫存單位,
-        供應商名稱: it.供應商名稱,
+        name: it.name,
+        stock_qty: it.stock_qty,
+        safety_stock: it.safety_stock,
+        stock_unit: it.stock_unit,
+        order_unit: it.stock_unit,
+        qty_per_order_unit: 1,
         suggested_qty: Math.round(needed * 10) / 10,
+        default_supplier: it.supplier_name,
+        suppliers: it.supplier_name
+          ? [{ supplier_name: it.supplier_name, is_primary: 1, price_per_order_unit: null }]
+          : [],
       }
     })
 

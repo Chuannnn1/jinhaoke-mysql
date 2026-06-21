@@ -18,9 +18,6 @@ interface ItemRow extends RowDataPacket {
   客製化: string | null
 }
 
-// ============================================================
-// GET /api/orders/:id — 查詢單一訂單（含 items 巢狀結構）
-// ============================================================
 export async function GET(
   _req: Request,
   { params }: { params: { id: string } }
@@ -51,24 +48,24 @@ export async function GET(
     )
 
     const itemsData = items.map(it => ({
-      餐點編號: it.餐點編號,
-      餐點名稱: it.餐點名稱,
-      數量: it.數量,
-      餐點價格: it.餐點價格,
-      小計: it.餐點價格 * it.數量,
-      客製化: (() => { try { return JSON.parse(it.客製化 ?? '[]') } catch { return [] } })(),
+      item_id: it.餐點編號,
+      name: it.餐點名稱,
+      quantity: it.數量,
+      unit_price: it.餐點價格,
+      subtotal: it.餐點價格 * it.數量,
+      customizations: (() => { try { return JSON.parse(it.客製化 ?? '[]') } catch { return [] } })(),
     }))
 
-    const total = itemsData.reduce((sum, it) => sum + it.小計, 0)
+    const total = itemsData.reduce((sum, it) => sum + it.subtotal, 0)
 
     return NextResponse.json({
       success: true,
       data: {
-        訂單編號: order.訂單編號,
-        訂單日期: order.訂單日期,
-        訂單狀態: order.訂單狀態,
-        顧客電話: order.顧客電話,
-        備註: order.備註,
+        order_id: order.訂單編號,
+        created_at: order.訂單日期,
+        status: order.訂單狀態,
+        customer_phone: order.顧客電話,
+        note: order.備註,
         items: itemsData,
         total,
       },
@@ -82,9 +79,6 @@ export async function GET(
   }
 }
 
-// ============================================================
-// DELETE /api/orders/:id — 取消訂單（軟刪除：status → 已取消）
-// ============================================================
 export async function DELETE(
   _req: Request,
   { params }: { params: { id: string } }

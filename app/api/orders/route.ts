@@ -28,21 +28,22 @@ interface AddonChoice {
 }
 
 interface OrderItem {
-  餐點編號: number
-  餐點名稱: string
-  數量: number
-  餐點價格: number
-  小計: number
-  客製化: string[][]
-  客製化明細?: AddonChoice[][]
+  item_id: number
+  name: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+  customizations: string[][]
+  customizations_amount: number
+  customizations_detail?: AddonChoice[][]
 }
 
 interface GroupedOrder {
-  訂單編號: string
-  顧客電話: string | null
-  訂單狀態: string
-  訂單日期: string
-  備註: string | null
+  order_id: string
+  customer_phone: string | null
+  status: string
+  created_at: string
+  note: string | null
   items: OrderItem[]
   total: number
 }
@@ -76,11 +77,11 @@ export async function GET() {
     for (const row of rows) {
       if (!grouped[row.訂單編號]) {
         grouped[row.訂單編號] = {
-          訂單編號: row.訂單編號,
-          顧客電話: row.顧客電話 ?? null,
-          訂單狀態: row.訂單狀態,
-          訂單日期: row.訂單日期,
-          備註: row.備註 ?? null,
+          order_id: row.訂單編號,
+          customer_phone: row.顧客電話 ?? null,
+          status: row.訂單狀態,
+          created_at: row.訂單日期,
+          note: row.備註 ?? null,
           items: [],
           total: 0,
         }
@@ -114,13 +115,14 @@ export async function GET() {
         const subtotal = baseSubtotal + addonTotal
 
         grouped[row.訂單編號].items.push({
-          餐點編號: row.餐點編號,
-          餐點名稱: row.餐點名稱!,
-          數量: row.數量!,
-          餐點價格: row.餐點價格,
-          小計: subtotal,
-          客製化: customizations,
-          客製化明細: detail.length > 0 ? detail : undefined,
+          item_id: row.餐點編號,
+          name: row.餐點名稱!,
+          quantity: row.數量!,
+          unit_price: row.餐點價格,
+          subtotal,
+          customizations,
+          customizations_amount: addonTotal,
+          customizations_detail: detail.length > 0 ? detail : undefined,
         })
         grouped[row.訂單編號].total += subtotal
       }

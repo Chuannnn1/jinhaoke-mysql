@@ -3,8 +3,8 @@ import { getPool } from '@/lib/db'
 import type { RowDataPacket } from 'mysql2/promise'
 
 interface SupplierRow extends RowDataPacket {
-  供應商名稱: string
-  供應商電話: string | null
+  name: string
+  phone: string | null
 }
 
 // GET /api/suppliers
@@ -12,7 +12,7 @@ export async function GET() {
   try {
     const pool = getPool()
     const [rows] = await pool.execute<SupplierRow[]>(
-      'SELECT `供應商名稱`, `供應商電話` FROM `供應商` ORDER BY `供應商名稱`'
+      'SELECT `供應商名稱` AS name, `供應商電話` AS phone FROM `供應商` ORDER BY `供應商名稱`'
     )
     return NextResponse.json({ success: true, data: rows })
   } catch (err) {
@@ -47,7 +47,7 @@ export async function POST(req: Request) {
     )
 
     const [rows] = await pool.execute<SupplierRow[]>(
-      'SELECT `供應商名稱`, `供應商電話` FROM `供應商` WHERE `供應商名稱` = ?', [name]
+      'SELECT `供應商名稱` AS name, `供應商電話` AS phone FROM `供應商` WHERE `供應商名稱` = ?', [name]
     )
 
     return NextResponse.json({ success: true, data: rows[0] }, { status: 201 })

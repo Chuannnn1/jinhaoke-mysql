@@ -19,8 +19,8 @@ export async function GET(
     const pool = getPool()
     const name = decodeURIComponent(params.name)
 
-    const [rows] = await pool.execute<IngredientRow[]>(
-      'SELECT `食材名稱`, `庫存數量`, `安全存量`, `庫存單位`, `供應商名稱` FROM `食材` WHERE `食材名稱` = ?',
+    const [rows] = await pool.execute<RowDataPacket[]>(
+      'SELECT `食材名稱` AS name, `庫存數量` AS stock_qty, `安全存量` AS safety_stock, `庫存單位` AS stock_unit, `供應商名稱` AS supplier_name FROM `食材` WHERE `食材名稱` = ?',
       [name]
     )
     if (rows.length === 0) {
@@ -131,8 +131,8 @@ export async function PATCH(
       values
     )
 
-    const [updated] = await pool.execute<IngredientRow[]>(
-      'SELECT `食材名稱`, `庫存數量`, `安全存量`, `庫存單位`, `供應商名稱` FROM `食材` WHERE `食材名稱` = ?',
+    const [updated] = await pool.execute<RowDataPacket[]>(
+      'SELECT `食材名稱` AS name, `庫存數量` AS stock_qty, `安全存量` AS safety_stock, `庫存單位` AS stock_unit, `供應商名稱` AS supplier_name FROM `食材` WHERE `食材名稱` = ?',
       [name]
     )
 
