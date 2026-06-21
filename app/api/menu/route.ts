@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise'
 
+export const dynamic = 'force-dynamic'
+
 interface MenuItemRow extends RowDataPacket {
   餐點編號: number
   餐點名稱: string

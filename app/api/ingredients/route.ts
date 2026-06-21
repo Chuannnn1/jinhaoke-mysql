@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import type { RowDataPacket } from 'mysql2/promise'
 
+export const dynamic = 'force-dynamic'
+
 interface Ingredient extends RowDataPacket {
   食材名稱: string
   庫存數量: number

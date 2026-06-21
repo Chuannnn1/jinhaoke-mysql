@@ -137,7 +137,7 @@ function InventoryTab() {
 
   const fetchInventory = useCallback(async () => {
     try {
-      const res = await fetch('/api/inventory')
+      const res = await fetch('/api/inventory', { cache: 'no-store' })
       const data = await res.json()
       if (data.success) setInventory(data.data)
       else setError(data.error || '讀取失敗')

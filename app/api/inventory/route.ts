@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import type { RowDataPacket } from 'mysql2/promise'
 
+export const dynamic = 'force-dynamic'
+
 interface IngredientRow extends RowDataPacket {
   name: string
   stock_qty: number

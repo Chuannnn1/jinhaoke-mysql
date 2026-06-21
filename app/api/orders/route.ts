@@ -4,6 +4,8 @@ import { computeAvailability } from '@/lib/availability'
 import { computeOrderConsumption, findInsufficientIngredients } from '@/lib/order-consumption'
 import type { RowDataPacket } from 'mysql2/promise'
 
+export const dynamic = 'force-dynamic'
+
 // ============================================================
 // 型別定義
 // ============================================================
