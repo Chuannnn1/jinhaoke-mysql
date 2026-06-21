@@ -109,7 +109,12 @@ function PurchasePageInner() {
     try {
       const res = await fetch('/api/suppliers')
       const data = await res.json()
-      if (data.success) setSuppliers(data.data)
+      if (data.success) {
+        setSuppliers(data.data.map((s: { name: string; phone: string | null }) => ({
+          供應商名稱: s.name,
+          供應商電話: s.phone,
+        })))
+      }
     } catch { /* ignore */ }
   }, [])
 
