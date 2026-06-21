@@ -464,7 +464,7 @@ export default function MenuPage() {
                                         onClick={() => handleReactivate(item)}
                                         className="px-3 py-1 text-xs rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors font-medium whitespace-nowrap"
                                       >
-                                        上架
+                                        重新上架
                                       </button>
                                       <button
                                         onClick={() => handlePermanentDelete(item)}
