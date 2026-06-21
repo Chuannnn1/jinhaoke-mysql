@@ -223,7 +223,7 @@ export default function CustomerOrderPage() {
 
       {/* ======== Sidebar ======== */}
       <aside className="w-[200px] bg-white border-r border-border flex flex-col shrink-0">
-        <a href="/admin" className="px-5 py-5 border-b border-border flex items-center gap-3 hover:bg-gray-50 transition-colors">
+        <a href="/" className="px-5 py-5 border-b border-border flex items-center gap-3 hover:bg-gray-50 transition-colors">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/brand/jinhaoke-logo.webp"
