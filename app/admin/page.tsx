@@ -963,9 +963,17 @@ export default function AdminOrderPage() {
                     const name = it.name ?? it.item_name ?? `?code${it.code}`
                     const hasAnyAddon = detail.length > 0 && detail.length === qty && detail.some(u => u.length > 0)
                     if (hasAnyAddon) {
+                      // 按客製化內容分組：相同 addon 組合合併為同一行
+                      const groups = new Map<string, { addons: Array<{ label: string; price: number }>; count: number }>()
                       for (const unitAddons of detail) {
-                        const addonTotal = unitAddons.reduce((s: number, a: { price: number }) => s + a.price, 0)
-                        expanded.push({ name, unitPrice, qty: 1, addons: unitAddons, addonTotal, subtotal: unitPrice + addonTotal })
+                        const key = unitAddons.map(a => a.id).sort().join(',') || '__none__'
+                        const existing = groups.get(key)
+                        if (existing) { existing.count++ }
+                        else { groups.set(key, { addons: unitAddons, count: 1 }) }
+                      }
+                      for (const { addons, count } of groups.values()) {
+                        const addonTotal = addons.reduce((s: number, a: { price: number }) => s + a.price, 0) * count
+                        expanded.push({ name, unitPrice, qty: count, addons: count === 1 ? addons : addons, addonTotal, subtotal: unitPrice * count + addonTotal })
                       }
                     } else {
                       const addonTotal = it.customizations_amount ?? 0
