@@ -403,6 +403,7 @@ function CreatePOModal({
   const today = new Date().toISOString().slice(0, 10)
   const [poDate, setPoDate] = useState(today)
   const [supplierName, setSupplierName] = useState('')
+  const [totalCost, setTotalCost] = useState('')
   const [items, setItems] = useState<DraftItem[]>([
     { ingredient_name: initialIngredient ?? '', order_qty: '' },
   ])
@@ -462,6 +463,7 @@ function CreatePOModal({
           po_date: poDate,
           supplier_name: supplierName.trim(),
           status: '已下單',
+          total_cost: Number(totalCost) || 0,
           items: validItems,
         }),
       })
@@ -489,7 +491,7 @@ function CreatePOModal({
         </div>
 
         <div className="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-ink/50 mb-1 block">採購日期</label>
               <input
@@ -517,6 +519,18 @@ function CreatePOModal({
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-xs text-ink/50 mb-1 block">總成本 (NT$)</label>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="選填"
+                value={totalCost}
+                onChange={e => setTotalCost(e.target.value)}
+                className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-clay"
+              />
             </div>
           </div>
 

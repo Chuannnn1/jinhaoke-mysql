@@ -580,13 +580,15 @@ export default function MenuPage() {
               {/* tag */}
               <div>
                 <label className="text-xs text-ink/50 mb-1 block">標籤</label>
-                <input
-                  type="text"
+                <select
                   value={form.分類標籤}
                   onChange={e => setForm(f => ({ ...f, 分類標籤: e.target.value }))}
-                  placeholder="豬、雞、魚…"
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-                />
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-clay"
+                >
+                  {['豬', '雞', '牛', '魚', '其他'].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
 
               {/* description */}

@@ -222,11 +222,13 @@ async function handleManualMode(pool: ReturnType<typeof getPool>, rawItems: Body
       const newPoId = poResult.insertId
 
       let itemCount = 0
-      for (const [ingName, { qty }] of items) {
+      let totalCost = 0
+      for (const [ingName, { qty, userCost }] of items) {
         await conn.execute(
           'INSERT INTO `採購單明細` (`採購單編號`, `食材名稱`, `數量`) VALUES (?, ?, ?)',
           [newPoId, ingName, qty]
         )
+        if (userCost) totalCost += userCost
         result.covered_ingredients.push(ingName)
         itemCount++
       }
@@ -234,6 +236,10 @@ async function handleManualMode(pool: ReturnType<typeof getPool>, rawItems: Body
       if (itemCount === 0) {
         await conn.execute('DELETE FROM `採購單` WHERE `採購單編號` = ?', [newPoId])
         continue
+      }
+
+      if (totalCost > 0) {
+        await conn.execute('UPDATE `採購單` SET `進貨食材總成本` = ? WHERE `採購單編號` = ?', [totalCost, newPoId])
       }
 
       result.created_count++

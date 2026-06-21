@@ -34,8 +34,6 @@ export async function GET() {
         stock_qty: it.stock_qty,
         safety_stock: it.safety_stock,
         stock_unit: it.stock_unit,
-        order_unit: it.stock_unit,
-        qty_per_order_unit: 1,
         suggested_qty: Math.round(needed * 10) / 10,
         default_supplier: it.supplier_name,
         suppliers: it.supplier_name

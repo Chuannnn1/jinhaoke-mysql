@@ -14,11 +14,7 @@ interface InventoryItem {
   stock_qty: number
   safety_stock: number
   stock_unit: string
-  order_unit: string
-  qty_per_order_unit: number
   supplier_name: string | null
-  order_block_threshold: number | null
-  category: string
 }
 
 interface Supplier {
@@ -37,8 +33,6 @@ interface LowStockItem {
   stock_qty: number
   safety_stock: number
   stock_unit: string
-  order_unit: string
-  qty_per_order_unit: number
   suggested_qty: number
   default_supplier: string | null
   suppliers: LowStockSupplierOption[]
@@ -46,13 +40,6 @@ interface LowStockItem {
 
 type TabKey = 'inventory' | 'suppliers'
 
-
-function effectiveBlockThreshold(item: InventoryItem): number {
-  if (item.order_block_threshold !== null && item.order_block_threshold !== undefined) {
-    return item.order_block_threshold
-  }
-  return item.safety_stock * 0.2
-}
 
 // 數量顯示格式：整數時不顯示小數、小數時顯示 1 位
 // （白米 stock_qty 會出現 83.5999999 這種浮點殘留值，需 toFixed(1)）
@@ -189,9 +176,8 @@ function InventoryTab() {
   const getStatus = (item: InventoryItem) => {
     const stock = item.stock_qty
     const safe = item.safety_stock
-    const block = effectiveBlockThreshold(item)
     if (safe <= 0) return { label: '—', color: 'bg-gray-100 text-gray-500' }
-    if (stock <= block) return { label: '售完', color: 'bg-gray-300 text-gray-700' }
+    if (stock <= 0) return { label: '售完', color: 'bg-gray-300 text-gray-700' }
     if (stock <= safe * 0.5) return { label: '不足', color: 'bg-red-100 text-red-700' }
     if (stock <= safe) return { label: '偏低', color: 'bg-yellow-100 text-yellow-700' }
     return { label: '充足', color: 'bg-green-100 text-green-700' }
@@ -370,6 +356,7 @@ function InventoryTab() {
           <thead>
             <tr className="bg-gray-50 text-ink/50 text-left text-xs uppercase tracking-wide">
               <th className="px-4 py-3 font-medium">品名</th>
+              <th className="px-4 py-3 font-medium text-center">單位</th>
               <th className="px-4 py-3 font-medium text-right">目前庫存</th>
               <th className="px-4 py-3 font-medium text-right">安全存量</th>
               <th className="px-4 py-3 font-medium text-center">狀態</th>
@@ -386,11 +373,12 @@ function InventoryTab() {
                   className={`border-t border-gray-200 hover:bg-gray-50/50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/20'}`}
                 >
                   <td className="px-4 py-3 font-medium text-ink">{item.name}</td>
+                  <td className="px-4 py-3 text-center text-xs text-ink/60">{item.stock_unit}</td>
                   <td className="px-4 py-3 text-right font-mono text-ink">
-                    {formatQty(item.stock_qty)} <span className="text-ink/40 text-xs">{item.stock_unit}</span>
+                    {formatQty(item.stock_qty)}
                   </td>
                   <td className="px-4 py-3 text-right text-ink/40 font-mono">
-                    {formatQty(item.safety_stock)} <span className="text-ink/30 text-xs">{item.stock_unit}</span>
+                    {formatQty(item.safety_stock)}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${status.color}`}>
@@ -482,15 +470,9 @@ function InventoryEditModal({
 }) {
   const [stockQty, setStockQty] = useState(String(item.stock_qty))
   const [safetyStock, setSafetyStock] = useState(String(item.safety_stock))
-  const [blockOverride, setBlockOverride] = useState(
-    item.order_block_threshold !== null && item.order_block_threshold !== undefined
-      ? String(item.order_block_threshold)
-      : ''
-  )
+  const [stockUnit, setStockUnit] = useState(item.stock_unit)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const fallback = item.safety_stock * 0.2
 
   const handleSubmit = async () => {
     setError(null)
@@ -505,15 +487,9 @@ function InventoryEditModal({
       setError('安全存量必須為 >= 0 的數字')
       return
     }
-
-    let blockValue: number | null = null
-    if (blockOverride.trim() !== '') {
-      const b = Number(blockOverride)
-      if (!Number.isFinite(b) || b < 0) {
-        setError('暫停接單點必須為 >= 0 的數字或留空')
-        return
-      }
-      blockValue = b
+    if (!stockUnit.trim()) {
+      setError('庫存單位不能為空')
+      return
     }
 
     setSubmitting(true)
@@ -524,7 +500,7 @@ function InventoryEditModal({
         body: JSON.stringify({
           stock_qty: sq,
           safety_stock: ss,
-          order_block_threshold: blockValue,
+          stock_unit: stockUnit.trim(),
         }),
       })
       const data = await res.json()
@@ -551,8 +527,18 @@ function InventoryEditModal({
         </div>
         <div className="px-6 py-5 space-y-4">
           <div>
+            <label className="text-xs text-ink/50 mb-1 block">庫存單位</label>
+            <input
+              type="text"
+              value={stockUnit}
+              onChange={e => setStockUnit(e.target.value)}
+              placeholder="片、kg、隻…"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
+            />
+          </div>
+          <div>
             <label className="text-xs text-ink/50 mb-1 block">
-              目前庫存（{item.stock_unit}）
+              目前庫存
             </label>
             <input
               type="number"
@@ -565,7 +551,7 @@ function InventoryEditModal({
           </div>
           <div>
             <label className="text-xs text-ink/50 mb-1 block">
-              安全存量（{item.stock_unit}）
+              安全存量
             </label>
             <input
               type="number"
@@ -577,23 +563,6 @@ function InventoryEditModal({
             />
             <p className="text-[11px] text-ink/30 mt-1">
               低於此值時提示補貨
-            </p>
-          </div>
-          <div>
-            <label className="text-xs text-ink/50 mb-1 block">
-              暫停接單點（{item.stock_unit}，留空使用預設）
-            </label>
-            <input
-              type="number"
-              step="any"
-              min="0"
-              value={blockOverride}
-              onChange={e => setBlockOverride(e.target.value)}
-              placeholder={`預設：${formatQty(fallback)}（安全存量 × 0.2）`}
-              className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-            />
-            <p className="text-[11px] text-ink/30 mt-1">
-              低於此值時，使用此食材的餐點會自動標記「售完」
             </p>
           </div>
           {error && (
@@ -900,15 +869,6 @@ function LowStockAlertModal({
   onClose: () => void
   onConfirm: (rows: Array<{ ingredient_name: string; supplier_name: string; order_qty: number; total_cost: number }>) => void
 }) {
-  // 計算預估成本：price_per_order_unit * order_qty（order_qty 已經是叫貨單位數量）
-  // 如果 order_qty 是 stock_unit 計量，需要 / qty_per_order_unit 換算
-  const calcCost = (item: LowStockItem, supplierName: string, orderQty: number): number => {
-    const sup = item.suppliers.find(s => s.supplier_name === supplierName)
-    if (!sup?.price_per_order_unit || !item.qty_per_order_unit || item.qty_per_order_unit <= 0) return 0
-    // order_qty 是以 stock_unit 為單位，換算成叫貨單位再乘單價
-    return Math.round(sup.price_per_order_unit * orderQty / item.qty_per_order_unit)
-  }
-
   const [draft, setDraft] = useState<LowDraftRow[]>(() =>
     items.map(it => {
       const supplierName =
@@ -916,33 +876,18 @@ function LowStockAlertModal({
         it.suppliers[0]?.supplier_name ??
         it.default_supplier ??
         ''
-      const qty = it.suggested_qty || 0
-      const cost = calcCost(it, supplierName, qty)
       return {
         ingredient_name: it.name,
         supplier_name: supplierName,
         order_qty: String(it.suggested_qty || ''),
-        estimated_cost: cost > 0 ? String(cost) : '',
+        estimated_cost: '',
         stock_unit: it.stock_unit,
       }
     })
   )
 
   const update = (idx: number, patch: Partial<LowDraftRow>) => {
-    setDraft(prev => prev.map((r, i) => {
-      if (i !== idx) return r
-      const updated = { ...r, ...patch }
-      // 如果是更改廠商或數量（非直接改成本），則自動重算成本
-      if ('supplier_name' in patch || 'order_qty' in patch) {
-        const item = items[idx]
-        const qty = Number(updated.order_qty)
-        if (item && Number.isFinite(qty) && qty > 0) {
-          const cost = calcCost(item, updated.supplier_name, qty)
-          updated.estimated_cost = cost > 0 ? String(cost) : updated.estimated_cost
-        }
-      }
-      return updated
-    }))
+    setDraft(prev => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)))
   }
 
   const updateCost = (idx: number, costStr: string) => {
@@ -1001,7 +946,6 @@ function LowStockAlertModal({
               {items.map((it, idx) => {
                 const row = draft[idx]
                 const supList = it.suppliers
-                const selected = supList.find(s => s.supplier_name === row.supplier_name)
                 return (
                   <tr key={it.name} className="border-b border-gray-100">
                     <td className="py-3 font-medium text-ink">{it.name}</td>
@@ -1028,17 +972,9 @@ function LowStockAlertModal({
                             <option key={s.supplier_name} value={s.supplier_name}>
                               {s.supplier_name}
                               {s.is_primary === 1 ? ' ★' : ''}
-                              {s.price_per_order_unit !== null
-                                ? ` (NT$${s.price_per_order_unit}/${it.order_unit})`
-                                : ''}
                             </option>
                           ))}
                         </select>
-                      )}
-                      {selected?.price_per_order_unit !== null && selected?.price_per_order_unit !== undefined && (
-                        <p className="text-[10px] text-ink/40 mt-0.5">
-                          參考價 NT${selected.price_per_order_unit} / {it.order_unit}
-                        </p>
                       )}
                     </td>
                     <td className="py-3 text-right">
@@ -1113,30 +1049,20 @@ function LowStockAlertModal({
 // 新增食材 Modal
 // ============================================================
 const STOCK_UNIT_PRESETS = ['片', '隻', 'kg', '包', '顆', '條', '瓶', '罐', '把', '盒', '份', '個']
-const ORDER_UNIT_PRESETS = ['箱', '包', '盒', '袋', '瓶', '罐', '桶', '組', '份', '個']
-const INGREDIENT_CATEGORIES = ['豬', '雞', '牛', '魚', '其他'] as const
 
 interface CreateIngredientForm {
   name: string
-  category: string
   stock_unit: string
-  order_unit: string
-  qty_per_order_unit: string
   stock_qty: string
   safety_stock: string
-  order_block_threshold: string
   supplier_name: string
 }
 
 const EMPTY_CREATE_FORM: CreateIngredientForm = {
   name: '',
-  category: '其他',
   stock_unit: '',
-  order_unit: '',
-  qty_per_order_unit: '',
   stock_qty: '0',
   safety_stock: '0',
-  order_block_threshold: '',
   supplier_name: '',
 }
 
@@ -1159,9 +1085,6 @@ function CreateIngredientModal({
   const handleSubmit = async () => {
     if (!form.name.trim()) { setError('請輸入食材名稱'); return }
     if (!form.stock_unit.trim()) { setError('請輸入庫存單位'); return }
-    if (!form.order_unit.trim()) { setError('請輸入叫貨單位'); return }
-    const qtyPerOrder = Number(form.qty_per_order_unit)
-    if (!qtyPerOrder || qtyPerOrder <= 0) { setError('每叫貨單位數量需大於 0'); return }
 
     setSubmitting(true)
     setError(null)
@@ -1170,15 +1093,11 @@ function CreateIngredientModal({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: form.name.trim(),
-          category: form.category,
-          stock_unit: form.stock_unit.trim(),
-          order_unit: form.order_unit.trim(),
-          qty_per_order_unit: qtyPerOrder,
-          stock_qty: Number(form.stock_qty) || 0,
-          safety_stock: Number(form.safety_stock) || 0,
-          order_block_threshold: form.order_block_threshold ? Number(form.order_block_threshold) : null,
-          supplier_name: form.supplier_name || undefined,
+          食材名稱: form.name.trim(),
+          庫存單位: form.stock_unit.trim(),
+          庫存數量: Number(form.stock_qty) || 0,
+          安全存量: Number(form.safety_stock) || 0,
+          供應商名稱: form.supplier_name || null,
         }),
       })
       const data = await res.json()
@@ -1216,32 +1135,7 @@ function CreateIngredientModal({
               />
             </div>
 
-            {/* 分類 + 供應商 */}
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-xs text-ink/50 mb-1 block">分類</label>
-                <select
-                  value={form.category}
-                  onChange={e => upd('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-clay"
-                >
-                  {INGREDIENT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div className="flex-1">
-                <label className="text-xs text-ink/50 mb-1 block">供應商</label>
-                <select
-                  value={form.supplier_name}
-                  onChange={e => upd('supplier_name', e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-clay"
-                >
-                  <option value="">— 無 —</option>
-                  {suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* 庫存單位 + 叫貨單位（datalist） */}
+            {/* 庫存單位 + 供應商 */}
             <div className="flex gap-3">
               <div className="flex-1">
                 <label className="text-xs text-ink/50 mb-1 block">庫存單位 <span className="text-red-400">*</span></label>
@@ -1258,36 +1152,16 @@ function CreateIngredientModal({
                 </datalist>
               </div>
               <div className="flex-1">
-                <label className="text-xs text-ink/50 mb-1 block">叫貨單位 <span className="text-red-400">*</span></label>
-                <input
-                  type="text"
-                  list="order-unit-list"
-                  value={form.order_unit}
-                  onChange={e => upd('order_unit', e.target.value)}
-                  placeholder="箱、包、盒…"
-                  className="w-full px-3 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-clay"
-                />
-                <datalist id="order-unit-list">
-                  {ORDER_UNIT_PRESETS.map(u => <option key={u} value={u} />)}
-                </datalist>
+                <label className="text-xs text-ink/50 mb-1 block">供應商</label>
+                <select
+                  value={form.supplier_name}
+                  onChange={e => upd('supplier_name', e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-clay"
+                >
+                  <option value="">— 無 —</option>
+                  {suppliers.map(s => <option key={s.name} value={s.name}>{s.name}</option>)}
+                </select>
               </div>
-            </div>
-
-            {/* 每叫貨單位數量 */}
-            <div>
-              <label className="text-xs text-ink/50 mb-1 block">
-                每叫貨單位數量 <span className="text-red-400">*</span>
-                <span className="text-ink/30 ml-1">（1 {form.order_unit || '叫貨單位'} = 幾 {form.stock_unit || '庫存單位'}）</span>
-              </label>
-              <input
-                type="number"
-                value={form.qty_per_order_unit}
-                onChange={e => upd('qty_per_order_unit', e.target.value)}
-                min={0.1}
-                step="any"
-                placeholder="例：10"
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-clay"
-              />
             </div>
 
             {/* 初始庫存 + 安全存量 */}
@@ -1314,23 +1188,6 @@ function CreateIngredientModal({
                   className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-clay"
                 />
               </div>
-            </div>
-
-            {/* 暫停接單點（選填） */}
-            <div>
-              <label className="text-xs text-ink/50 mb-1 block">
-                暫停接單點
-                <span className="text-ink/30 ml-1">（選填，低於此值時前台停售）</span>
-              </label>
-              <input
-                type="number"
-                value={form.order_block_threshold}
-                onChange={e => upd('order_block_threshold', e.target.value)}
-                min={0}
-                step="any"
-                placeholder="留空使用預設值（安全存量 × 20%）"
-                className="w-full px-3 py-2 border border-border rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-clay"
-              />
             </div>
 
             {error && (

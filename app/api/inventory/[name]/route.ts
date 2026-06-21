@@ -121,6 +121,15 @@ export async function PATCH(
       values.push(body.stock_qty)
     }
 
+    if (Object.prototype.hasOwnProperty.call(body, 'stock_unit')) {
+      const unit = typeof body.stock_unit === 'string' ? body.stock_unit.trim() : ''
+      if (!unit) {
+        return NextResponse.json({ success: false, error: '庫存單位不能為空' }, { status: 400 })
+      }
+      sets.push('`庫存單位` = ?')
+      values.push(unit)
+    }
+
     if (sets.length === 0) {
       return NextResponse.json({ success: false, error: '無可更新的欄位' }, { status: 400 })
     }

@@ -39,12 +39,28 @@ export async function PUT(
       return NextResponse.json({ success: false, error: '找不到該供應商' }, { status: 404 })
     }
 
-    if (body.phone !== undefined) {
-      const phone = (typeof body.phone === 'string' && body.phone.trim()) ? body.phone.trim() : null
-      await pool.execute('UPDATE `供應商` SET `供應商電話` = ? WHERE `供應商名稱` = ?', [phone, params.name])
+    const newName = (typeof body.name === 'string' && body.name.trim()) ? body.name.trim() : null
+    const newPhone = body.phone !== undefined
+      ? ((typeof body.phone === 'string' && body.phone.trim()) ? body.phone.trim() : null)
+      : undefined
+
+    if (newName && newName !== params.name) {
+      const [dup] = await pool.execute<RowDataPacket[]>(
+        'SELECT `供應商名稱` FROM `供應商` WHERE `供應商名稱` = ?', [newName]
+      )
+      if (dup.length > 0) {
+        return NextResponse.json({ success: false, error: '該供應商名稱已存在' }, { status: 409 })
+      }
+      await pool.execute('UPDATE `供應商` SET `供應商名稱` = ? WHERE `供應商名稱` = ?', [newName, params.name])
     }
 
-    const [updated] = await pool.execute<SupplierRow[]>(SELECT_SQL, [params.name])
+    const currentName = (newName && newName !== params.name) ? newName : params.name
+
+    if (newPhone !== undefined) {
+      await pool.execute('UPDATE `供應商` SET `供應商電話` = ? WHERE `供應商名稱` = ?', [newPhone, currentName])
+    }
+
+    const [updated] = await pool.execute<SupplierRow[]>(SELECT_SQL, [currentName])
     return NextResponse.json({ success: true, data: updated[0] })
   } catch (err) {
     console.error('[PUT /api/suppliers/:name]', err)

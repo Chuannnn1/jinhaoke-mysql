@@ -950,7 +950,6 @@ export default function AdminOrderPage() {
               {/* meta row */}
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
                 <Meta label="建立時間" value={detailOrder.created_at?.replace('T', ' ').slice(0, 16) ?? '—'} />
-                <Meta label="顧客" value={detailOrder.customer_name ?? '內用顧客'} />
                 <Meta label="電話" value={detailOrder.customer_phone || '—'} />
                 <Meta label="付款狀態" value={detailOrder.status === '已完成' ? '已付款' : detailOrder.status === '已取消' ? '已取消' : detailOrder.status === '待付款' ? '未付款' : '尚未結帳'} />
               </div>
