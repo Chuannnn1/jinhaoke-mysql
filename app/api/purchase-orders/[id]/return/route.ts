@@ -2,16 +2,9 @@ import { NextResponse } from 'next/server'
 import { getPool } from '@/lib/db'
 import type { RowDataPacket } from 'mysql2/promise'
 
-// ============================================================
 // POST /api/purchase-orders/:id/return — 登錄退貨
-//
-// 邏輯：
-//   1. 確認採購單存在
-//   2. 確認食材在採購單明細中
-//   3. 累計已退量 + 本次 <= 採購數量
-//   4. 庫存足夠扣減
-//   5. 扣庫存 + 寫入退貨單
-// ============================================================
+// 退貨發生在「已到貨」狀態（驗收入庫前），不影響庫存
+// 全數退完自動轉「已退貨」
 interface ReturnBody {
   ingredient_name: string
   return_qty: number
@@ -95,25 +88,6 @@ export async function POST(
       )
     }
 
-    // 庫存夠扣
-    const [ingRows] = await pool.execute<RowDataPacket[]>(
-      'SELECT `食材名稱`, `庫存數量` FROM `食材` WHERE `食材名稱` = ?',
-      [ingName]
-    )
-    if (ingRows.length === 0) {
-      return NextResponse.json(
-        { success: false, error: '找不到該食材' },
-        { status: 404 }
-      )
-    }
-    const stockQty = Number(ingRows[0].庫存數量)
-    if (stockQty < body.return_qty) {
-      return NextResponse.json(
-        { success: false, error: `庫存不足：目前 ${ingName} 庫存為 ${stockQty}，無法退貨 ${body.return_qty}` },
-        { status: 400 }
-      )
-    }
-
     const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
 
     const conn = await pool.getConnection()
@@ -121,14 +95,24 @@ export async function POST(
       await conn.beginTransaction()
 
       await conn.execute(
-        'UPDATE `食材` SET `庫存數量` = `庫存數量` - ? WHERE `食材名稱` = ?',
-        [body.return_qty, ingName]
-      )
-
-      await conn.execute(
         'INSERT INTO `退貨單` (`採購單編號`, `食材名稱`, `退貨單日期`, `退貨原因`, `退貨數量`) VALUES (?, ?, ?, ?, ?)',
         [poId, ingName, today, body.return_reason?.trim() || null, body.return_qty]
       )
+
+      // 檢查是否全部退完 → 自動轉 已退貨
+      const [allItems] = await conn.execute<RowDataPacket[]>(
+        'SELECT `食材名稱`, `數量` FROM `採購單明細` WHERE `採購單編號` = ?', [poId]
+      )
+      const [allReturns] = await conn.execute<RowDataPacket[]>(
+        'SELECT `食材名稱`, COALESCE(SUM(`退貨數量`), 0) AS s FROM `退貨單` WHERE `採購單編號` = ? GROUP BY `食材名稱`', [poId]
+      )
+      const returnMap = new Map((allReturns as Array<{ 食材名稱: string; s: number }>).map(r => [r.食材名稱, Number(r.s)]))
+      const fullyReturned = (allItems as Array<{ 食材名稱: string; 數量: number }>).every(
+        it => (returnMap.get(it.食材名稱) || 0) >= it.數量
+      )
+      if (fullyReturned) {
+        await conn.execute('UPDATE `採購單` SET `採購單狀態` = ? WHERE `採購單編號` = ?', ['已退貨', poId])
+      }
 
       await conn.commit()
     } catch (err) {

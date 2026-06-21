@@ -37,12 +37,11 @@ interface Ingredient {
   供應商名稱: string | null
 }
 
-const STATUS_OPTIONS = ['已下單', '已到貨', '已取消'] as const
-
 const STATUS_COLORS: Record<string, string> = {
-  '已下單': 'bg-blue-100 text-blue-700',
-  '已到貨': 'bg-green-100 text-green-700',
-  '已取消': 'bg-orange-100 text-orange-700',
+  '未到貨': 'bg-blue-100 text-blue-700',
+  '已到貨': 'bg-amber-100 text-amber-700',
+  '已完成驗收': 'bg-green-100 text-green-700',
+  '已退貨': 'bg-red-100 text-red-700',
 }
 
 function getReturnableInfo(po: PurchaseOrder) {
@@ -141,8 +140,8 @@ function PurchasePageInner() {
     fetchIngredients()
   }, [fetchOrders, fetchSuppliers, fetchIngredients])
 
-  const handleReceive = async (poId: number) => {
-    if (!window.confirm(`確認採購單 #${poId} 已到貨入庫？此動作將自動將訂購量加進庫存。`)) return
+  const handleMarkArrived = async (poId: number) => {
+    if (!window.confirm(`確認採購單 #${poId} 已到貨？`)) return
     try {
       const res = await fetch(`/api/purchase/${poId}`, {
         method: 'PATCH',
@@ -150,21 +149,31 @@ function PurchasePageInner() {
         body: JSON.stringify({ status: '已到貨' }),
       })
       const data = await res.json()
-      if (data.success) {
-        fetchOrders()
-      } else {
-        window.alert(data.error || '驗貨失敗')
-      }
-    } catch {
-      window.alert('網路錯誤')
-    }
+      if (data.success) fetchOrders()
+      else window.alert(data.error || '操作失敗')
+    } catch { window.alert('網路錯誤') }
+  }
+
+  const handleReceive = async (poId: number) => {
+    if (!window.confirm(`確認採購單 #${poId} 驗收入庫？將自動把訂購量（扣除已退）加進庫存。`)) return
+    try {
+      const res = await fetch(`/api/purchase/${poId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: '已完成驗收' }),
+      })
+      const data = await res.json()
+      if (data.success) fetchOrders()
+      else window.alert(data.error || '驗收失敗')
+    } catch { window.alert('網路錯誤') }
   }
 
   const summary = useMemo(() => {
     const total = orders.length
-    const open = orders.filter(o => o.採購單狀態 === '已下單').length
-    const done = orders.filter(o => o.採購單狀態 === '已到貨').length
-    return { total, open, done }
+    const pending = orders.filter(o => o.採購單狀態 === '未到貨').length
+    const arrived = orders.filter(o => o.採購單狀態 === '已到貨').length
+    const done = orders.filter(o => o.採購單狀態 === '已完成驗收').length
+    return { total, pending, arrived, done }
   }, [orders])
 
   return (
@@ -182,17 +191,21 @@ function PurchasePageInner() {
       </header>
 
       <main className="flex-1 overflow-auto p-6 bg-gray-50">
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4 mb-6">
           <div className="bg-white rounded-xl shadow-sm px-5 py-4">
-            <span className="text-xs text-ink/40 uppercase tracking-wide">採購單總數</span>
+            <span className="text-xs text-ink/40 uppercase tracking-wide">總數</span>
             <p className="text-2xl font-bold text-ink mt-1">{summary.total}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm px-5 py-4">
-            <span className="text-xs text-blue-600 uppercase tracking-wide">待到貨</span>
-            <p className="text-2xl font-bold text-blue-600 mt-1">{summary.open}</p>
+            <span className="text-xs text-blue-600 uppercase tracking-wide">未到貨</span>
+            <p className="text-2xl font-bold text-blue-600 mt-1">{summary.pending}</p>
           </div>
           <div className="bg-white rounded-xl shadow-sm px-5 py-4">
-            <span className="text-xs text-green-600 uppercase tracking-wide">已到貨</span>
+            <span className="text-xs text-amber-600 uppercase tracking-wide">已到貨</span>
+            <p className="text-2xl font-bold text-amber-600 mt-1">{summary.arrived}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-sm px-5 py-4">
+            <span className="text-xs text-green-600 uppercase tracking-wide">已驗收</span>
             <p className="text-2xl font-bold text-green-600 mt-1">{summary.done}</p>
           </div>
         </div>
@@ -250,22 +263,31 @@ function PurchasePageInner() {
                     })()}
                   </div>
                   <div className="flex items-center gap-2">
-                    {po.採購單狀態 === '已下單' && (
+                    {po.採購單狀態 === '未到貨' && (
                       <button
-                        onClick={() => handleReceive(po.採購單編號)}
-                        className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600 transition-colors"
+                        onClick={() => handleMarkArrived(po.採購單編號)}
+                        className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-xs hover:bg-amber-600 transition-colors"
                       >
-                        驗貨入庫
+                        到貨
                       </button>
                     )}
-                    {(po.採購單狀態 === '已到貨' || po.採購單狀態 === '已取消') && !getReturnableInfo(po).fullyReturned && (
-                      <button
-                        onClick={() => setReturnTarget(po)}
-                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
-                        title="登錄退貨（會從庫存扣回）"
-                      >
-                        退貨
-                      </button>
+                    {po.採購單狀態 === '已到貨' && (
+                      <>
+                        <button
+                          onClick={() => handleReceive(po.採購單編號)}
+                          className="px-3 py-1.5 bg-green-500 text-white rounded-lg text-xs hover:bg-green-600 transition-colors"
+                        >
+                          驗收入庫
+                        </button>
+                        {!getReturnableInfo(po).fullyReturned && (
+                          <button
+                            onClick={() => setReturnTarget(po)}
+                            className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs hover:bg-red-600 transition-colors"
+                          >
+                            退貨
+                          </button>
+                        )}
+                      </>
                     )}
                     <button
                       onClick={() =>
@@ -462,7 +484,7 @@ function CreatePOModal({
         body: JSON.stringify({
           po_date: poDate,
           supplier_name: supplierName.trim(),
-          status: '已下單',
+          status: '未到貨',
           total_cost: Number(totalCost) || 0,
           items: validItems,
         }),

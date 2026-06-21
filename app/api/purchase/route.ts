@@ -79,7 +79,7 @@ export async function GET(req: Request) {
 interface CreatePOBody {
   po_date?: string
   supplier_name: string
-  status?: '已下單' | '已到貨' | '已取消'
+  status?: '未到貨' | '已到貨' | '已完成驗收' | '已退貨'
   items: Array<{
     ingredient_name: string
     order_qty: number
@@ -131,8 +131,8 @@ export async function POST(req: Request) {
       }
     }
 
-    const status = body.status ?? '已下單'
-    if (!['已下單', '已到貨', '已取消'].includes(status)) {
+    const status = body.status ?? '未到貨'
+    if (!['未到貨', '已到貨', '已完成驗收', '已退貨'].includes(status)) {
       return NextResponse.json(
         { success: false, error: `非法狀態：${status}` },
         { status: 400 }
@@ -164,16 +164,6 @@ export async function POST(req: Request) {
           'INSERT INTO `採購單明細` (`採購單編號`, `食材名稱`, `數量`) VALUES (?, ?, ?)',
           [newPoId, name, qty]
         )
-      }
-
-      // 若直接建單為「已到貨」，同步入庫
-      if (status === '已到貨') {
-        for (const [name, qty] of merged) {
-          await conn.execute(
-            'UPDATE `食材` SET `庫存數量` = `庫存數量` + ? WHERE `食材名稱` = ?',
-            [qty, name]
-          )
-        }
       }
 
       await conn.commit()

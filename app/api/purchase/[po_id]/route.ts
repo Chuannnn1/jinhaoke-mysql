@@ -26,7 +26,7 @@ interface ReturnRecord {
   退貨數量: number
 }
 
-const ALLOWED_STATUS = ['已下單', '已到貨', '已取消'] as const
+const ALLOWED_STATUS = ['未到貨', '已到貨', '已完成驗收', '已退貨'] as const
 
 async function loadOrder(pool: Pool, poId: number): Promise<PurchaseOrder | null> {
   const [poRows] = await pool.execute<RowDataPacket[]>(
@@ -87,7 +87,7 @@ export async function GET(
 // PATCH /api/purchase/:po_id — 改狀態（含自動入庫）
 // ============================================================
 interface PatchBody {
-  status?: '已下單' | '已到貨' | '已取消'
+  status?: '未到貨' | '已到貨' | '已完成驗收' | '已退貨'
 }
 
 export async function PATCH(
@@ -117,7 +117,7 @@ export async function PATCH(
       }
     }
 
-    const enteringReceived = body.status === '已到貨' && prevStatus !== '已到貨'
+    const enteringReceived = body.status === '已完成驗收' && prevStatus !== '已完成驗收'
 
     const conn = await pool.getConnection()
     try {
@@ -130,16 +130,25 @@ export async function PATCH(
         )
       }
 
-      // 進入「已到貨」→ 將明細數量加回食材庫存
+      // 進入「已完成驗收」→ 將明細數量（扣除已退量）加回食材庫存
       if (enteringReceived) {
         const [items] = await conn.execute<RowDataPacket[]>(
           'SELECT `食材名稱`, `數量` FROM `採購單明細` WHERE `採購單編號` = ?', [poId]
         )
+        const [returnedSums] = await conn.execute<RowDataPacket[]>(
+          'SELECT `食材名稱`, COALESCE(SUM(`退貨數量`), 0) AS s FROM `退貨單` WHERE `採購單編號` = ? GROUP BY `食材名稱`', [poId]
+        )
+        const byIng = new Map((returnedSums as Array<{ 食材名稱: string; s: number }>).map(r => [r.食材名稱, Number(r.s) || 0]))
+
         for (const it of items as Array<{ 食材名稱: string; 數量: number }>) {
-          await conn.execute(
-            'UPDATE `食材` SET `庫存數量` = `庫存數量` + ? WHERE `食材名稱` = ?',
-            [it.數量, it.食材名稱]
-          )
+          const returned = byIng.get(it.食材名稱) || 0
+          const net = it.數量 - returned
+          if (net > 0) {
+            await conn.execute(
+              'UPDATE `食材` SET `庫存數量` = `庫存數量` + ? WHERE `食材名稱` = ?',
+              [net, it.食材名稱]
+            )
+          }
         }
       }
 

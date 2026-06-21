@@ -99,7 +99,7 @@ export async function POST(req: Request) {
 
         const [poResult] = await conn.execute<ResultSetHeader>(
           'INSERT INTO `採購單` (`採購單日期`, `供應商名稱`, `進貨食材總成本`, `採購單狀態`) VALUES (?, ?, 0, ?)',
-          [today, supplier, '已下單']
+          [today, supplier, '未到貨']
         )
         const newPoId = poResult.insertId
 
@@ -217,7 +217,7 @@ async function handleManualMode(pool: ReturnType<typeof getPool>, rawItems: Body
     for (const [supplier, items] of bySupplier) {
       const [poResult] = await conn.execute<ResultSetHeader>(
         'INSERT INTO `採購單` (`採購單日期`, `供應商名稱`, `進貨食材總成本`, `採購單狀態`) VALUES (?, ?, 0, ?)',
-        [today, supplier, '已下單']
+        [today, supplier, '未到貨']
       )
       const newPoId = poResult.insertId
 
