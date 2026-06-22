@@ -265,10 +265,7 @@ export default function CustomerOrderPage() {
         </header>
 
         {/* ---- Content ---- */}
-        <main
-          className="flex-1 overflow-auto p-6 bg-gray-50 transition-[padding] duration-300 ease-out"
-          style={{ paddingRight: cartOpen ? '404px' : undefined }}
-        >
+        <main className="flex-1 overflow-auto p-6 bg-gray-50">
 
           {/* 載入中 */}
           {menuLoading && (
@@ -598,8 +595,18 @@ function CustomizationModal({ item, onClose, onSave }) {
       >
         {/* header */}
         <div className="px-5 py-4 bg-clay-soft border-b border-clay/20 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">{item.emoji || '🍱'}</span>
+          <div className="flex items-center gap-3">
+            {item.image_url ? (
+              <img
+                src={item.image_url}
+                alt={item.name}
+                className="w-10 h-10 rounded-lg object-cover shrink-0 border border-clay/20"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-white border border-clay/20 flex items-center justify-center text-lg shrink-0">
+                🍱
+              </div>
+            )}
             <div className="flex-1">
               <p className="text-sm font-semibold text-ink">{item.name}</p>
               <p className="text-[11px] text-ink-mute">
