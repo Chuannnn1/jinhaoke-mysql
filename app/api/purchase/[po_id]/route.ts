@@ -145,7 +145,7 @@ export async function PATCH(
           const net = it.數量 - returned
           if (net > 0) {
             await conn.execute(
-              'UPDATE `食材` SET `庫存數量` = `庫存數量` + ? WHERE `食材名稱` = ?',
+              'UPDATE `食材` SET `庫存數量` = ROUND(`庫存數量` + ?, 2) WHERE `食材名稱` = ?',
               [net, it.食材名稱]
             )
           }

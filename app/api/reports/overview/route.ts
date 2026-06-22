@@ -147,18 +147,18 @@ export async function GET(req: Request) {
     `, [prevFromDT, prevToDT])
     const prevSum = prevSumRows[0] as { revenue: number }
 
-    // ── 採購成本（已下單 + 已到貨，不含已取消）─────────────────
+    // ── 採購成本（已到貨 + 已完成驗收，不含未到貨/已退貨）─────────────────
     const [costRows] = await pool.execute<RowDataPacket[]>(`
       SELECT COALESCE(SUM(\`進貨食材總成本\`), 0) AS cost
       FROM \`採購單\`
-      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已下單', '已到貨')
+      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已到貨', '已完成驗收')
     `, [from, to])
     const costNow = (costRows[0] as { cost: number }).cost
 
     const [prevCostRows] = await pool.execute<RowDataPacket[]>(`
       SELECT COALESCE(SUM(\`進貨食材總成本\`), 0) AS cost
       FROM \`採購單\`
-      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已下單', '已到貨')
+      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已到貨', '已完成驗收')
     `, [prevFrom, prevTo])
     const prevCostVal = (prevCostRows[0] as { cost: number }).cost
 

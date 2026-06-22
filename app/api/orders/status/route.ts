@@ -74,7 +74,7 @@ export async function PATCH(request: Request) {
 
       for (const [ingName, qty] of consumption) {
         await conn.execute(
-          'UPDATE `食材` SET `庫存數量` = `庫存數量` - ? WHERE `食材名稱` = ?',
+          'UPDATE `食材` SET `庫存數量` = ROUND(`庫存數量` - ?, 2) WHERE `食材名稱` = ?',
           [qty, ingName]
         )
       }

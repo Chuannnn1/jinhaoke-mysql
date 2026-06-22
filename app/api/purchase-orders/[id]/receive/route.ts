@@ -94,7 +94,7 @@ export async function POST(
       for (const item of body.received_items) {
         if (item.received_qty > 0) {
           await conn.execute(
-            'UPDATE `食材` SET `庫存數量` = `庫存數量` + ? WHERE `食材名稱` = ?',
+            'UPDATE `食材` SET `庫存數量` = ROUND(`庫存數量` + ?, 2) WHERE `食材名稱` = ?',
             [item.received_qty, item.ingredient_name.trim()]
           )
         }
