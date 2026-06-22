@@ -265,7 +265,11 @@ export default function CustomerOrderPage() {
         </header>
 
         {/* ---- Content ---- */}
-        <main className="flex-1 overflow-auto p-6 bg-gray-50">
+        <main
+          className="flex-1 overflow-auto p-6 bg-gray-50 transition-[margin] duration-300 ease-out"
+          style={{ marginRight: cartOpen ? '380px' : 0 }}
+          onClick={() => { if (cartOpen) setCartOpen(false) }}
+        >
 
           {/* 載入中 */}
           {menuLoading && (
