@@ -26,6 +26,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url)
     const supplierName = searchParams.get('supplier_name')
     const status = searchParams.get('status')
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
 
     let sql = 'SELECT `採購單編號`, `採購單日期`, `供應商名稱`, `進貨食材總成本`, `採購單狀態` FROM `採購單` WHERE 1=1'
     const params: string[] = []
@@ -37,6 +39,14 @@ export async function GET(req: Request) {
     if (status) {
       sql += ' AND `採購單狀態` = ?'
       params.push(status)
+    }
+    if (from) {
+      sql += ' AND `採購單日期` >= ?'
+      params.push(from)
+    }
+    if (to) {
+      sql += ' AND `採購單日期` <= ?'
+      params.push(to)
     }
     sql += ' ORDER BY `採購單日期` DESC, `採購單編號` DESC'
 

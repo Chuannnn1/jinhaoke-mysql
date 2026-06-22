@@ -40,6 +40,14 @@ interface DrillOrder {
   customer_name: string; customer_phone: string | null; note: string | null
   items: DrillOrderItem[]
 }
+interface DrillPO {
+  採購單編號: number
+  採購單日期: string
+  供應商名稱: string
+  進貨食材總成本: number
+  採購單狀態: string
+  items?: { 食材名稱: string; 數量: number; 已退數量: number }[]
+}
 
 // ── 主題色（呼應 clay 體系）──
 type Scope = 'today' | 'week' | 'month' | 'custom'
@@ -459,6 +467,9 @@ export default function DashboardPage() {
   const [drillOrders, setDrillOrders] = useState<DrillOrder[] | null>(null)
   const [drillLoading, setDrillLoading] = useState(false)
   const [drillDetail, setDrillDetail] = useState<DrillOrder | null>(null)
+  // 採購單 drill-down modal
+  const [drillPOs, setDrillPOs] = useState<DrillPO[] | null>(null)
+  const [drillPOLoading, setDrillPOLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const openDrillDown = async () => {
@@ -473,6 +484,19 @@ export default function DashboardPage() {
       if (data.success) setDrillOrders(data.data)
     } catch { /* silent */ }
     finally { setDrillLoading(false) }
+  }
+
+  const openPurchaseDrillDown = async () => {
+    if (!overview) return
+    setDrillPOLoading(true)
+    setDrillPOs(null)
+    try {
+      const { from, to } = overview.range
+      const res = await fetch(`/api/purchase?from=${from}&to=${to}`)
+      const data = await res.json()
+      if (data.success) setDrillPOs(data.data)
+    } catch { /* silent */ }
+    finally { setDrillPOLoading(false) }
   }
 
   const theme = THEMES[scope]
@@ -582,8 +606,9 @@ export default function DashboardPage() {
               <KpiCard
                 label="採購成本"
                 value={`NT$ ${fmtMoney(summary.cost)}`}
-                sub={`vs ${summary.prev_label} NT$ ${fmtMoney(summary.prev_cost)}`}
+                sub={`期間 ${overview!.range.from} → ${overview!.range.to}　▸ 點擊查看`}
                 accent="#8B6F4D"
+                onClick={openPurchaseDrillDown}
               />
             </div>
             <div className="col-span-4">
@@ -791,6 +816,67 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* 採購單 drill-down modal */}
+      {(drillPOs !== null || drillPOLoading) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
+              <h3 className="font-semibold text-ink text-base">
+                期間採購單{' '}
+                <span className="text-sm font-normal text-ink/50">
+                  {overview?.range.from} → {overview?.range.to}
+                </span>
+              </h3>
+              <button onClick={() => setDrillPOs(null)}
+                className="text-ink/40 hover:text-ink text-2xl leading-none">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {drillPOLoading ? (
+                <p className="text-center py-12 text-ink/40">載入中...</p>
+              ) : drillPOs && drillPOs.length === 0 ? (
+                <p className="text-center py-12 text-ink/40">期間內無採購單</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-gray-50">
+                    <tr className="text-xs text-ink/50 text-left">
+                      <th className="px-4 py-2.5 font-medium">PO #</th>
+                      <th className="px-4 py-2.5 font-medium">日期</th>
+                      <th className="px-4 py-2.5 font-medium">供應商</th>
+                      <th className="px-4 py-2.5 font-medium text-center">狀態</th>
+                      <th className="px-4 py-2.5 font-medium text-right">成本</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillPOs?.map((po, i) => (
+                      <tr key={po.採購單編號}
+                        className={`border-t border-gray-100 ${i % 2 === 0 ? '' : 'bg-gray-50/30'}`}>
+                        <td className="px-4 py-2.5 font-mono text-xs text-ink/70">#{po.採購單編號}</td>
+                        <td className="px-4 py-2.5 text-xs text-ink/50 font-mono">{po.採購單日期?.slice(0, 10)}</td>
+                        <td className="px-4 py-2.5 text-sm text-ink">{po.供應商名稱}</td>
+                        <td className="px-4 py-2.5 text-center"><PurchaseStatusBadge status={po.採購單狀態} /></td>
+                        <td className="px-4 py-2.5 text-right font-mono" style={{ color: '#8B6F4D' }}>
+                          NT$ {fmtMoney(po.進貨食材總成本)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {drillPOs && (
+              <div className="px-6 py-3 border-t border-gray-200 text-xs text-ink/50 shrink-0 flex items-center justify-between">
+                <span>
+                  共 {drillPOs.length} 筆採購單 · 合計 NT$ {fmtMoney(drillPOs.reduce((s, po) => s + (po.進貨食材總成本 || 0), 0))}
+                </span>
+                <a href="/admin/purchase" className="text-xs hover:underline" style={{ color: '#8B6F4D' }}>
+                  前往採購管理 →
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 單筆訂單詳情 modal */}
       {drillDetail && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
@@ -857,6 +943,20 @@ function StatusBadge({ status }: { status: string }) {
     '待付款': 'bg-orange-100 text-orange-700',
     '已完成': 'bg-emerald-100 text-emerald-700',
     '已取消': 'bg-red-100 text-red-700',
+  }
+  return (
+    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[status] ?? 'bg-gray-100'}`}>
+      {status}
+    </span>
+  )
+}
+
+function PurchaseStatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    '未到貨': 'bg-blue-100 text-blue-700',
+    '已到貨': 'bg-amber-100 text-amber-700',
+    '已完成驗收': 'bg-green-100 text-green-700',
+    '已退貨': 'bg-red-100 text-red-700',
   }
   return (
     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[status] ?? 'bg-gray-100'}`}>

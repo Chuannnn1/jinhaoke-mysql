@@ -79,6 +79,35 @@ export default function PurchasePage() {
   )
 }
 
+type Scope = 'today' | 'week' | 'month' | 'all'
+
+const SCOPE_THEMES: Record<Scope, { hex: string; label: string }> = {
+  today: { hex: '#D4A847', label: '今日' },
+  week:  { hex: '#C65D21', label: '本週' },
+  month: { hex: '#A44A17', label: '本月' },
+  all:   { hex: '#6B7280', label: '全部' },
+}
+
+function todayTW() {
+  return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+function addDays(ymd: string, delta: number): string {
+  const d = new Date(ymd + 'T00:00:00Z')
+  d.setUTCDate(d.getUTCDate() + delta)
+  return d.toISOString().slice(0, 10)
+}
+
+function scopeToRange(scope: Scope): { from?: string; to?: string } {
+  if (scope === 'all') return {}
+  const today = todayTW()
+  if (scope === 'today') return { from: today, to: today }
+  if (scope === 'week') return { from: addDays(today, -6), to: today }
+  const d = new Date(today + 'T00:00:00Z')
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+  return { from: `${d.getUTCFullYear()}-${mm}-01`, to: today }
+}
+
 function PurchasePageInner() {
   const searchParams = useSearchParams()
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
@@ -90,10 +119,16 @@ function PurchasePageInner() {
   const [modalOpen, setModalOpen] = useState(false)
   const [returnTarget, setReturnTarget] = useState<PurchaseOrder | null>(null)
   const [prefillIngredient, setPrefillIngredient] = useState<string | null>(null)
+  const [scope, setScope] = useState<Scope>('all')
 
   const fetchOrders = useCallback(async () => {
+    setLoading(true)
     try {
-      const res = await fetch('/api/purchase')
+      const range = scopeToRange(scope)
+      let qs = ''
+      if (range.from) qs += `from=${range.from}&`
+      if (range.to) qs += `to=${range.to}&`
+      const res = await fetch(`/api/purchase?${qs}`)
       const data = await res.json()
       if (data.success) setOrders(data.data)
       else setError(data.error || '讀取失敗')
@@ -102,7 +137,7 @@ function PurchasePageInner() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [scope])
 
   const fetchSuppliers = useCallback(async () => {
     try {
@@ -182,12 +217,33 @@ function PurchasePageInner() {
         <h2 className="text-ink font-body font-semibold text-sm tracking-wide">
           採購管理
         </h2>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="px-4 py-1.5 bg-gray-500 text-white text-sm rounded-lg hover:bg-clay-deep transition-colors font-medium"
-        >
-          + 新增採購單
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="inline-flex bg-gray-50 rounded-full p-1 border border-border/40 shadow-sm">
+            {(['today', 'week', 'month', 'all'] as Scope[]).map(s => {
+              const active = s === scope
+              const t = SCOPE_THEMES[s]
+              return (
+                <button
+                  key={s}
+                  onClick={() => setScope(s)}
+                  className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
+                  style={active
+                    ? { backgroundColor: t.hex, color: 'white' }
+                    : { color: '#888' }
+                  }
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+          <button
+            onClick={() => setModalOpen(true)}
+            className="px-4 py-1.5 bg-gray-500 text-white text-sm rounded-lg hover:bg-clay-deep transition-colors font-medium"
+          >
+            + 新增採購單
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-auto p-6 bg-gray-50">
