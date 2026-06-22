@@ -147,19 +147,30 @@ export async function GET(req: Request) {
     `, [prevFromDT, prevToDT])
     const prevSum = prevSumRows[0] as { revenue: number }
 
-    // ── 採購成本（已到貨 + 已完成驗收，不含未到貨/已退貨）─────────────────
-    const [costRows] = await pool.execute<RowDataPacket[]>(`
-      SELECT COALESCE(SUM(\`進貨食材總成本\`), 0) AS cost
-      FROM \`採購單\`
-      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已到貨', '已完成驗收')
-    `, [from, to])
+    // ── 採購成本（按退貨比例扣減）─────────────────
+    const costQuery = `
+      SELECT COALESCE(SUM(
+        po.\`進貨食材總成本\` * CASE
+          WHEN COALESCE(det.total_ordered, 0) = 0 THEN 1
+          ELSE GREATEST(0, 1 - COALESCE(ret.total_returned, 0) / det.total_ordered)
+        END
+      ), 0) AS cost
+      FROM \`採購單\` po
+      LEFT JOIN (
+        SELECT \`採購單編號\`, SUM(\`數量\`) AS total_ordered
+        FROM \`採購單明細\` GROUP BY \`採購單編號\`
+      ) det ON po.\`採購單編號\` = det.\`採購單編號\`
+      LEFT JOIN (
+        SELECT \`採購單編號\`, SUM(\`退貨數量\`) AS total_returned
+        FROM \`退貨單\` GROUP BY \`採購單編號\`
+      ) ret ON po.\`採購單編號\` = ret.\`採購單編號\`
+      WHERE po.\`採購單日期\` >= ? AND po.\`採購單日期\` <= ?
+        AND po.\`採購單狀態\` IN ('已到貨', '已完成驗收')
+    `
+    const [costRows] = await pool.execute<RowDataPacket[]>(costQuery, [from, to])
     const costNow = (costRows[0] as { cost: number }).cost
 
-    const [prevCostRows] = await pool.execute<RowDataPacket[]>(`
-      SELECT COALESCE(SUM(\`進貨食材總成本\`), 0) AS cost
-      FROM \`採購單\`
-      WHERE \`採購單日期\` >= ? AND \`採購單日期\` <= ? AND \`採購單狀態\` IN ('已到貨', '已完成驗收')
-    `, [prevFrom, prevTo])
+    const [prevCostRows] = await pool.execute<RowDataPacket[]>(costQuery, [prevFrom, prevTo])
     const prevCostVal = (prevCostRows[0] as { cost: number }).cost
 
     const revenue = Math.round(Number(sum.revenue))
